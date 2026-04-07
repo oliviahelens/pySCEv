@@ -20,6 +20,15 @@ def ensure_velocity(
     Modifies adata in-place, adding velocity layers, velocity graph,
     and velocity embedding.
 
+    .. warning::
+        This is a convenience wrapper that **destructively modifies adata
+        in-place**. When velocity needs to be estimated from scratch, it
+        calls ``scv.pp.filter_and_normalize`` which subsets genes (default
+        ``n_top_genes=2000``) and normalizes counts. If you need to
+        preserve the original gene set or have custom preprocessing, run
+        scVelo yourself on a copy and pass the precomputed velocity layers
+        to ``score_angular_velocity_entropy`` directly.
+
     Params
     -------
     adata
@@ -28,8 +37,18 @@ def ensure_velocity(
         scVelo velocity mode: 'stochastic', 'deterministic', or 'dynamical'.
     """
     import scvelo as scv
+    import warnings
 
     if 'velocity' not in adata.layers:
+
+        warnings.warn(
+            "No precomputed velocity found. Running scVelo pipeline which "
+            "will filter genes (n_top_genes=2000) and normalize adata "
+            "in-place. To avoid this, precompute velocity on a copy and "
+            "pass it directly.",
+            UserWarning,
+            stacklevel=2,
+        )
 
         if 'spliced' not in adata.layers or 'unspliced' not in adata.layers:
             raise ValueError(
