@@ -17,7 +17,8 @@ def ensure_velocity(
 
     Runs scVelo velocity estimation if 'velocity' layer is missing.
     Expects adata to contain 'spliced' and 'unspliced' layers.
-    Modifies adata in-place.
+    Modifies adata in-place, adding velocity layers, velocity graph,
+    and velocity embedding.
 
     Params
     -------
@@ -28,24 +29,26 @@ def ensure_velocity(
     """
     import scvelo as scv
 
-    if 'velocity' in adata.layers:
-        return
+    if 'velocity' not in adata.layers:
 
-    if 'spliced' not in adata.layers or 'unspliced' not in adata.layers:
-        raise ValueError(
-            "AnnData must contain 'spliced' and 'unspliced' layers "
-            "for velocity estimation. Run velocyto or kb-python "
-            "to generate these counts."
-        )
+        if 'spliced' not in adata.layers or 'unspliced' not in adata.layers:
+            raise ValueError(
+                "AnnData must contain 'spliced' and 'unspliced' layers "
+                "for velocity estimation. Run velocyto or kb-python "
+                "to generate these counts."
+            )
 
-    scv.pp.filter_and_normalize(adata, min_shared_counts=20, n_top_genes=2000)
-    scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
+        scv.pp.filter_and_normalize(adata, min_shared_counts=20, n_top_genes=2000)
+        scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
 
-    if mode == 'dynamical':
-        scv.tl.recover_dynamics(adata)
+        if mode == 'dynamical':
+            scv.tl.recover_dynamics(adata)
 
-    scv.tl.velocity(adata, mode=mode)
-    scv.tl.velocity_graph(adata)
+        scv.tl.velocity(adata, mode=mode)
+
+    # Ensure velocity graph exists (needed for velocity_embedding)
+    if 'velocity_graph' not in adata.uns:
+        scv.tl.velocity_graph(adata)
 
 
 def score_angular_velocity_entropy(
@@ -73,12 +76,15 @@ def score_angular_velocity_entropy(
     velocity and the cell's own velocity are computed via cosine
     similarity and binned into [0, pi].
 
+    Cells whose velocity magnitude is below 1e-10 (effectively zero)
+    are assigned NaN, as their angular entropy is undefined.
+
     Params
     -------
     adata
         Annotated data matrix. Must have velocity projection in
-        adata.obsm[f'velocity_{basis}']. If missing, scVelo is
-        used to compute it.
+        adata.obsm[f'velocity_{basis}']. If missing, attempts
+        to compute it via scVelo.
     basis
         Embedding for neighbor lookup and velocity projection.
         'umap' for 2D, 'pca' for higher-dimensional.
@@ -99,9 +105,14 @@ def score_angular_velocity_entropy(
     AnnData or None if inplace.
     """
     from sklearn.neighbors import NearestNeighbors
+    from tqdm.auto import tqdm
 
     velocity_key = f'velocity_{basis}'
     embedding_key = f'X_{basis}'
+
+    # Copy upfront if not inplace, so we never mutate the caller's object
+    if not inplace:
+        adata = adata.copy()
 
     # Validate embedding exists
     if embedding_key not in adata.obsm:
@@ -112,66 +123,84 @@ def score_angular_velocity_entropy(
 
     # Ensure velocity projection exists
     if velocity_key not in adata.obsm:
+        if 'velocity' not in adata.layers:
+            raise ValueError(
+                "No velocity data found. Either precompute velocity "
+                "(e.g. via scvelo or pysce.ensure_velocity) or provide "
+                f"adata.obsm['{velocity_key}'] directly."
+            )
         try:
             import scvelo as scv
-            scv.tl.velocity_embedding(adata, basis=basis)
         except ImportError:
             raise ImportError(
                 f"Velocity embedding '{velocity_key}' not found and scvelo "
                 "is not installed. Either precompute velocity embeddings or "
                 "install scvelo: pip install scvelo"
             )
+        if 'velocity_graph' not in adata.uns:
+            scv.tl.velocity_graph(adata)
+        scv.tl.velocity_embedding(adata, basis=basis)
 
     V = np.asarray(adata.obsm[velocity_key])
     X_emb = np.asarray(adata.obsm[embedding_key])
     n_cells = adata.n_obs
     ndim = V.shape[1]
 
+    # Identify cells with near-zero velocity (undefined direction)
+    vel_norms = np.linalg.norm(V, axis=1)
+    zero_vel_mask = vel_norms < 1e-10
+
     # Build k-NN index in embedding space
-    nn = NearestNeighbors(n_neighbors=min(n_neighbors + 1, n_cells), algorithm='auto')
+    k = min(n_neighbors, n_cells - 1)
+    nn = NearestNeighbors(n_neighbors=k + 1, algorithm='auto')
     nn.fit(X_emb)
     indices = nn.kneighbors(return_distance=False)[:, 1:]  # exclude self
 
-    entropy_scores = np.zeros(n_cells)
+    entropy_scores = np.full(n_cells, np.nan)
 
     if ndim == 2:
         # 2D: absolute angles via atan2, binned into [0, 2pi)
         angles = np.arctan2(V[:, 1], V[:, 0]) % (2 * np.pi)
         bin_edges = np.linspace(0, 2 * np.pi, n_bins + 1)
 
-        for i in range(n_cells):
-            neighbor_angles = angles[indices[i]]
+        for i in tqdm(range(n_cells), desc="Scoring angular velocity entropy", unit="cell"):
+            # Skip cells with zero velocity
+            if zero_vel_mask[i]:
+                continue
+            # Only use neighbors that themselves have nonzero velocity
+            nbr_idx = indices[i][~zero_vel_mask[indices[i]]]
+            if len(nbr_idx) == 0:
+                continue
+            neighbor_angles = angles[nbr_idx]
             counts, _ = np.histogram(neighbor_angles, bins=bin_edges)
-            total = counts.sum()
-            if total > 0:
-                p = counts[counts > 0] / total
-                entropy_scores[i] = -np.sum(p * np.log2(p))
+            p = counts[counts > 0] / counts.sum()
+            entropy_scores[i] = -np.sum(p * np.log2(p))
     else:
         # Higher-dim: angle between each neighbor's velocity and
         # the cell's own velocity, binned into [0, pi]
-        norms = np.linalg.norm(V, axis=1, keepdims=True)
-        norms = np.clip(norms, 1e-10, None)
-        V_unit = V / norms
+        V_unit = np.zeros_like(V)
+        valid = ~zero_vel_mask
+        V_unit[valid] = V[valid] / vel_norms[valid, np.newaxis]
         bin_edges = np.linspace(0, np.pi, n_bins + 1)
 
-        for i in range(n_cells):
-            cos_sim = V_unit[indices[i]] @ V_unit[i]
+        for i in tqdm(range(n_cells), desc="Scoring angular velocity entropy", unit="cell"):
+            if zero_vel_mask[i]:
+                continue
+            nbr_idx = indices[i][~zero_vel_mask[indices[i]]]
+            if len(nbr_idx) == 0:
+                continue
+            cos_sim = V_unit[nbr_idx] @ V_unit[i]
             cos_sim = np.clip(cos_sim, -1.0, 1.0)
             theta = np.arccos(cos_sim)
             counts, _ = np.histogram(theta, bins=bin_edges)
-            total = counts.sum()
-            if total > 0:
-                p = counts[counts > 0] / total
-                entropy_scores[i] = -np.sum(p * np.log2(p))
+            p = counts[counts > 0] / counts.sum()
+            entropy_scores[i] = -np.sum(p * np.log2(p))
 
     # Normalize to [0, 1] if requested
     if normalize:
         max_entropy = np.log2(n_bins)
         if max_entropy > 0:
             entropy_scores = entropy_scores / max_entropy
-
-    if not inplace:
-        adata = adata.copy()
 
     adata.obs[key_added] = entropy_scores
 
