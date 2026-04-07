@@ -263,10 +263,9 @@ def test_high_dim_pairwise():
     assert np.median(aligned_valid) < 0.05, (
         f"Aligned high-dim entropy too high: {np.median(aligned_valid):.4f}"
     )
-    # In high dimensions, pairwise angles between random unit vectors
-    # concentrate around pi/2 (concentration of measure), so entropy
-    # won't reach 1.0. But it should still be well above aligned (~0).
-    assert np.median(random_valid) > 0.3, (
+    # With dimension-aware normalization, random vectors should now
+    # score near 1.0 even in high dimensions.
+    assert np.median(random_valid) > 0.85, (
         f"Random high-dim entropy too low: {np.median(random_valid):.4f}"
     )
     assert np.median(aligned_valid) < np.median(random_valid)

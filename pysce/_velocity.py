@@ -8,6 +8,42 @@ from anndata import AnnData
 import numpy as np
 
 
+def _max_entropy_for_dim(ndim, n_bins):
+    """\
+    Compute the maximum expected Shannon entropy (in bits) for a given
+    dimensionality and bin count.
+
+    For 2D, random directions are uniform on [0, 2pi), so max entropy
+    is log2(n_bins).
+
+    For higher dimensions, pairwise angles between random unit vectors
+    follow the distribution f(theta) ∝ sin^(d-2)(theta) on [0, pi].
+    We integrate this density over each bin to get the expected bin
+    probabilities, then compute Shannon entropy from those.
+    """
+    if ndim == 2:
+        return np.log2(n_bins)
+
+    from scipy.integrate import quad
+
+    d = ndim
+    bin_edges = np.linspace(0, np.pi, n_bins + 1)
+
+    # Unnormalized density: sin^(d-2)(theta)
+    def kernel(theta):
+        return np.sin(theta) ** (d - 2)
+
+    # Integrate over each bin
+    bin_masses = np.array([
+        quad(kernel, bin_edges[j], bin_edges[j + 1])[0]
+        for j in range(n_bins)
+    ])
+    # Normalize to probabilities
+    p = bin_masses / bin_masses.sum()
+    p = p[p > 0]
+    return -np.sum(p * np.log2(p))
+
+
 def ensure_velocity(
     adata: AnnData,
     mode: str = 'stochastic',
@@ -128,8 +164,13 @@ def score_angular_velocity_entropy(
     n_bins
         Number of angular bins for the histogram.
     normalize
-        If True, normalize entropy to [0, 1] by dividing by
-        log2(n_bins) (the maximum possible entropy).
+        If True, normalize entropy to [0, 1] by dividing by the
+        expected maximum entropy for the given dimensionality.
+        For 2D this is log2(n_bins) (uniform on circle). For
+        higher dimensions, the max is derived analytically from
+        the pairwise angle distribution f(θ) ∝ sin^(d-2)(θ),
+        accounting for concentration of measure. This makes
+        scores directly comparable across 2D and high-dim bases.
     key_added
         Key in adata.obs where scores are stored.
     inplace
@@ -236,7 +277,7 @@ def score_angular_velocity_entropy(
 
     # Normalize to [0, 1] if requested
     if normalize:
-        max_entropy = np.log2(n_bins)
+        max_entropy = _max_entropy_for_dim(ndim, n_bins)
         if max_entropy > 0:
             entropy_scores = entropy_scores / max_entropy
 
