@@ -11,30 +11,35 @@ import numpy as np
 def ensure_velocity(
     adata: AnnData,
     mode: str = 'stochastic',
+    basis: str = 'umap',
 ) -> None:
     """\
     Ensure Velocity
 
-    Runs scVelo velocity estimation if 'velocity' layer is missing.
-    Expects adata to contain 'spliced' and 'unspliced' layers.
-    Modifies adata in-place, adding velocity layers, velocity graph,
-    and velocity embedding.
+    Ensures that adata contains all velocity components needed for
+    downstream entropy scoring: velocity layer, velocity graph, and
+    velocity embedding projection.
+
+    Runs each step only if the corresponding output is missing.
 
     .. warning::
-        This is a convenience wrapper that **destructively modifies adata
-        in-place**. When velocity needs to be estimated from scratch, it
-        calls ``scv.pp.filter_and_normalize`` which subsets genes (default
-        ``n_top_genes=2000``) and normalizes counts. If you need to
-        preserve the original gene set or have custom preprocessing, run
-        scVelo yourself on a copy and pass the precomputed velocity layers
-        to ``score_angular_velocity_entropy`` directly.
+        When velocity needs to be estimated from scratch, this calls
+        ``scv.pp.filter_and_normalize`` which **subsets genes**
+        (default ``n_top_genes=2000``) **and normalizes counts
+        in-place**. If you need to preserve the original gene set
+        or have custom preprocessing, run scVelo yourself on a copy
+        and pass the precomputed velocity layers to
+        ``score_angular_velocity_entropy`` directly.
 
     Params
     -------
     adata
-        Annotated data matrix with spliced/unspliced layers.
+        Annotated data matrix with spliced/unspliced layers
+        (required only if velocity layer is missing).
     mode
         scVelo velocity mode: 'stochastic', 'deterministic', or 'dynamical'.
+    basis
+        Embedding basis for velocity projection (e.g. 'umap', 'pca').
     """
     import scvelo as scv
     import warnings
@@ -65,9 +70,18 @@ def ensure_velocity(
 
         scv.tl.velocity(adata, mode=mode)
 
-    # Ensure velocity graph exists (needed for velocity_embedding)
     if 'velocity_graph' not in adata.uns:
         scv.tl.velocity_graph(adata)
+
+    velocity_key = f'velocity_{basis}'
+    if velocity_key not in adata.obsm:
+        if f'X_{basis}' not in adata.obsm:
+            raise ValueError(
+                f"Embedding 'X_{basis}' not found in adata.obsm. "
+                f"Cannot project velocity onto '{basis}'. Compute "
+                f"the embedding first (e.g. sc.tl.umap)."
+            )
+        scv.tl.velocity_embedding(adata, basis=basis)
 
 
 def score_angular_velocity_entropy(
@@ -83,20 +97,22 @@ def score_angular_velocity_entropy(
     Local Angular Velocity Entropy (Metric 1)
 
     For each cell, examines the RNA velocity vectors of its k nearest
-    neighbors in embedding space and computes Shannon entropy of the
-    angular distribution.
+    neighbors in embedding space and computes Shannon entropy of how
+    spread out those velocity directions are among the neighbors.
 
-    High entropy = disordered, multipotent neighborhood dynamics.
-    Low entropy = coherent directional flow (committed trajectory).
+    High entropy = neighbors moving in scattered directions
+    (disordered / multipotent neighborhood).
+    Low entropy = neighbors moving coherently in the same direction
+    (committed trajectory).
 
-    For 2D embeddings (e.g. UMAP), velocity vectors are converted to
-    absolute angles via atan2 and binned into [0, 2pi). For higher-
-    dimensional embeddings (e.g. PCA), angles between each neighbor's
-    velocity and the cell's own velocity are computed via cosine
-    similarity and binned into [0, pi].
+    For 2D embeddings, each neighbor's velocity direction is converted
+    to an absolute angle via atan2 and binned in [0, 2pi). For higher-
+    dimensional embeddings, all pairwise angles among neighbor velocity
+    vectors are computed via cosine similarity and binned in [0, pi].
 
-    Cells whose velocity magnitude is below 1e-10 (effectively zero)
-    are assigned NaN, as their angular entropy is undefined.
+    Cells with near-zero velocity (magnitude < 1e-10) are assigned
+    NaN. Summary statistics (number of scored cells, NaN count,
+    parameters used) are stored in adata.uns[key_added + '_params'].
 
     Params
     -------
@@ -178,25 +194,25 @@ def score_angular_velocity_entropy(
     entropy_scores = np.full(n_cells, np.nan)
 
     if ndim == 2:
-        # 2D: absolute angles via atan2, binned into [0, 2pi)
+        # 2D: absolute angle of each velocity vector, binned in [0, 2pi).
+        # Entropy measures how spread out neighbor directions are.
         angles = np.arctan2(V[:, 1], V[:, 0]) % (2 * np.pi)
         bin_edges = np.linspace(0, 2 * np.pi, n_bins + 1)
 
         for i in tqdm(range(n_cells), desc="Scoring angular velocity entropy", unit="cell"):
-            # Skip cells with zero velocity
             if zero_vel_mask[i]:
                 continue
-            # Only use neighbors that themselves have nonzero velocity
             nbr_idx = indices[i][~zero_vel_mask[indices[i]]]
             if len(nbr_idx) == 0:
                 continue
-            neighbor_angles = angles[nbr_idx]
-            counts, _ = np.histogram(neighbor_angles, bins=bin_edges)
+            counts, _ = np.histogram(angles[nbr_idx], bins=bin_edges)
             p = counts[counts > 0] / counts.sum()
             entropy_scores[i] = -np.sum(p * np.log2(p))
     else:
-        # Higher-dim: angle between each neighbor's velocity and
-        # the cell's own velocity, binned into [0, pi]
+        # Higher-dim: pairwise angles among neighbor velocity vectors
+        # via cosine similarity, binned in [0, pi]. Measures the same
+        # thing as the 2D path — directional spread — but generalized
+        # to arbitrary dimensions.
         V_unit = np.zeros_like(V)
         valid = ~zero_vel_mask
         V_unit[valid] = V[valid] / vel_norms[valid, np.newaxis]
@@ -206,11 +222,14 @@ def score_angular_velocity_entropy(
             if zero_vel_mask[i]:
                 continue
             nbr_idx = indices[i][~zero_vel_mask[indices[i]]]
-            if len(nbr_idx) == 0:
+            if len(nbr_idx) < 2:
                 continue
-            cos_sim = V_unit[nbr_idx] @ V_unit[i]
-            cos_sim = np.clip(cos_sim, -1.0, 1.0)
-            theta = np.arccos(cos_sim)
+            nbr_vecs = V_unit[nbr_idx]
+            # Pairwise cosine similarities (upper triangle)
+            cos_matrix = nbr_vecs @ nbr_vecs.T
+            triu_idx = np.triu_indices(len(nbr_idx), k=1)
+            cos_pairs = np.clip(cos_matrix[triu_idx], -1.0, 1.0)
+            theta = np.arccos(cos_pairs)
             counts, _ = np.histogram(theta, bins=bin_edges)
             p = counts[counts > 0] / counts.sum()
             entropy_scores[i] = -np.sum(p * np.log2(p))
@@ -222,6 +241,18 @@ def score_angular_velocity_entropy(
             entropy_scores = entropy_scores / max_entropy
 
     adata.obs[key_added] = entropy_scores
+
+    # Store run metadata so users can inspect parameters and coverage
+    n_scored = int(np.isfinite(entropy_scores).sum())
+    n_nan = int(np.isnan(entropy_scores).sum())
+    adata.uns[key_added + '_params'] = {
+        'basis': basis,
+        'n_neighbors': n_neighbors,
+        'n_bins': n_bins,
+        'normalize': normalize,
+        'n_cells_scored': n_scored,
+        'n_cells_nan': n_nan,
+    }
 
     if not inplace:
         return adata
