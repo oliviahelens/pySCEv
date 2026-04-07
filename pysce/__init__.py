@@ -5,3 +5,4 @@
 # ###################################################################################################
 
 from ._tools import score
+from ._velocity import score_angular_velocity_entropy, ensure_velocity
