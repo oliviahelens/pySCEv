@@ -85,8 +85,8 @@ Reference values (n_bins=8):
 
 See `examples/` for validation figures:
 
-- **`examples/tier1_synthetic/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
-- **`examples/tier2_pancreas/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
+- **`examples/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
+- **`examples/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
 
 ## Status
 
