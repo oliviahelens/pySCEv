@@ -11,15 +11,42 @@ import numpy as np
 def _max_entropy_for_dim(ndim, n_bins):
     """\
     Compute the maximum expected Shannon entropy (in bits) for a given
-    dimensionality and bin count.
+    dimensionality and bin count, used to normalize scores so that
+    0 = perfectly aligned and 1 = as random as possible regardless
+    of dimensionality.
 
     For 2D, random directions are uniform on [0, 2pi), so max entropy
-    is log2(n_bins).
+    is simply log2(n_bins).
 
     For higher dimensions, pairwise angles between random unit vectors
     follow the distribution f(theta) ∝ sin^(d-2)(theta) on [0, pi].
-    We integrate this density over each bin to get the expected bin
-    probabilities, then compute Shannon entropy from those.
+    Due to concentration of measure, this distribution becomes
+    increasingly peaked around pi/2 as dimensionality grows, reducing
+    the raw entropy of even perfectly random vectors. We integrate
+    this density over each bin to get the expected bin probabilities,
+    then compute Shannon entropy from those.
+
+    Reference values (n_bins=8):
+
+        ndim    max entropy (bits)    interpretation
+        ----    ------------------    --------------
+           2              3.00        uniform on circle
+          10              1.89        angles spread over ~half the bins
+          30              1.21        concentrated near pi/2
+          50              1.05        tightly concentrated near pi/2
+
+    Params
+    -------
+    ndim
+        Dimensionality of the velocity vectors.
+    n_bins
+        Number of angular histogram bins.
+
+    Returns
+    -------
+    max_entropy : float
+        Expected Shannon entropy (bits) of the binned angle
+        distribution for uniformly random unit vectors.
     """
     if ndim == 2:
         return np.log2(n_bins)
@@ -286,11 +313,14 @@ def score_angular_velocity_entropy(
     # Store run metadata so users can inspect parameters and coverage
     n_scored = int(np.isfinite(entropy_scores).sum())
     n_nan = int(np.isnan(entropy_scores).sum())
+    max_ent = _max_entropy_for_dim(ndim, n_bins)
     adata.uns[key_added + '_params'] = {
         'basis': basis,
+        'embedding_ndim': ndim,
         'n_neighbors': n_neighbors,
         'n_bins': n_bins,
         'normalize': normalize,
+        'max_entropy_bits': float(max_ent),
         'n_cells_scored': n_scored,
         'n_cells_nan': n_nan,
     }
