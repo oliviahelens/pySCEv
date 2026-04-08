@@ -81,7 +81,7 @@ Reference values (n_bins=8):
 | 30 (PCA) | 1.21 | Strong concentration near pi/2 |
 | 50 | 1.05 | Very tight concentration |
 
-## Mathematical Details
+## How It Works
 
 ### Expression Entropy (pySCE) — Markov Chain Entropy on a PPI Network
 
