@@ -8,7 +8,7 @@ pySCE computes entropy-based metrics for single-cell transcriptomic data. It pro
 
 1. **Expression Entropy** (`pysce.score`) — Scores each cell's transcriptional entropy using a protein-protein interaction (PPI) network and Markov chain entropy, based on the SCENT framework. GPU-accelerated via PyTorch.
 
-2. **Angular Velocity Entropy** (`pysce.score_angular_velocity_entropy`) — Scores how coherent or disordered the RNA velocity field is in each cell's local neighborhood. Designed to distinguish tumor-initiating cells (TICs) from normal stem cells, which can have similar expression entropy but different velocity dynamics.
+2. **Angular Velocity Entropy** (`pysce.score_angular_velocity_entropy`) — *Experimental.* Scores how coherent or disordered the RNA velocity field is in each cell's local neighborhood. The hypothesis is that this metric may capture dynamic differences that expression entropy alone cannot — for example, tumor-initiating cells (TICs) and normal stem cells can have similar expression entropy but potentially distinct velocity dynamics. This tool is under active development and validation; see [Status](#status) below.
 
 ## Installation
 
@@ -78,6 +78,19 @@ Reference values (n_bins=8):
 | 10 | 1.89 | Moderate concentration |
 | 30 (PCA) | 1.21 | Strong concentration near pi/2 |
 | 50 | 1.05 | Very tight concentration |
+
+## Status
+
+**Expression Entropy** is based on the established SCENT framework and is stable.
+
+**Angular Velocity Entropy** is speculative and under active validation. The core question is whether velocity-based entropy provides biological insight that expression entropy and existing tools (e.g., scVelo's velocity confidence) do not. Early results on synthetic data confirm the math is sound, and testing on the scVelo pancreas endocrinogenesis dataset shows that the metric captures meaningful structure — actively differentiating populations (Ngn3 high EP, Pre-endocrine) show low angular entropy (coherent flow), while quiescent or terminal populations show higher entropy (disordered neighborhoods). This is consistent with known biology but the interpretation differs from the initial hypothesis: low entropy marks active transitions, not necessarily "committed" fates.
+
+Open questions:
+- Does angular velocity entropy distinguish TICs from normal stem cells in practice?
+- Does it provide information beyond what scVelo confidence scores already capture? (Preliminary: the two are correlated at r ~ -0.48 but not redundant.)
+- How sensitive is the metric to RNA velocity estimation noise, neighbor count, and bin count?
+
+This tool is provided as-is for exploration and hypothesis generation. Interpret results in the context of your specific dataset and biological question.
 
 ## License
 
