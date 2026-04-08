@@ -177,11 +177,14 @@ See `examples/` for validation figures:
 
 **What we know so far:**
 - Synthetic validation: Math is sound. Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
-- Pancreas endocrinogenesis: The metric captures meaningful structure — actively differentiating populations (Ngn3 high EP, Pre-endocrine) show low angular entropy (coherent flow), while quiescent or terminal populations show higher entropy (disordered neighborhoods). This is consistent with known biology but the interpretation differs from the initial hypothesis: low entropy marks active transitions, not necessarily "committed" fates. Anti-correlates with scVelo confidence (r ~ -0.48) but is not redundant. Nearly uncorrelated with expression entropy (r ~ 0.02), confirming the two metrics capture independent biological information.
+- Pancreas endocrinogenesis: The metric captures meaningful structure — actively differentiating populations (Ngn3 high EP, Pre-endocrine) show low angular entropy (coherent flow), while quiescent or terminal populations show higher entropy (disordered neighborhoods). This is consistent with known biology but the interpretation differs from the initial hypothesis: low entropy marks active transitions, not necessarily "committed" fates.
+- Anti-correlates with scVelo confidence (r ~ -0.48) but is not redundant (~77% unique variance).
+- Nearly uncorrelated with expression entropy (r ~ 0.02), confirming the two metrics capture independent biological information.
+- Highly correlated with simpler mean angular deviation (r ~ 0.80). The entropy formulation captures the full distribution shape (e.g., bimodal splits at bifurcation points), while mean angle only captures the first moment. In practice, most cells have unimodal neighbor angle distributions, so the two track closely. The ~20% unique variance in entropy likely comes from genuine bifurcation/decision points where the angle distribution is multimodal.
 
 **Open questions:**
 - Does angular velocity entropy distinguish TICs from normal stem cells in practice?
-- Does it provide information beyond what scVelo confidence scores already capture?
+- Given the high correlation with mean angular deviation, does the entropy formulation's sensitivity to multimodal distributions provide meaningful additional biological insight, or would the simpler metric suffice?
 - How sensitive is the metric to RNA velocity estimation noise, neighbor count, and bin count?
 
 This tool is provided as-is for exploration and hypothesis generation. Interpret results in the context of your specific dataset and biological question.
