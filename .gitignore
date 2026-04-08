@@ -161,3 +161,6 @@ cython_debug/
 
 # Downloaded datasets (scVelo cache, etc.)
 data/
+
+# Generated figures
+*.png
