@@ -93,8 +93,8 @@ See `examples/` for validation figures:
 **Angular Velocity Entropy** is speculative and under active validation. The core question is whether velocity-based entropy provides biological insight that expression entropy and existing tools (e.g., scVelo's velocity confidence) do not.
 
 **What we know so far:**
-- Tier 1 (synthetic): Math is sound. Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
-- Tier 2 (pancreas): The metric captures meaningful structure — actively differentiating populations (Ngn3 high EP, Pre-endocrine) show low angular entropy (coherent flow), while quiescent or terminal populations show higher entropy (disordered neighborhoods). This is consistent with known biology but the interpretation differs from the initial hypothesis: low entropy marks active transitions, not necessarily "committed" fates. Anti-correlates with scVelo confidence (r ~ -0.48) but is not redundant.
+- Synthetic validation: Math is sound. Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
+- Pancreas endocrinogenesis: The metric captures meaningful structure — actively differentiating populations (Ngn3 high EP, Pre-endocrine) show low angular entropy (coherent flow), while quiescent or terminal populations show higher entropy (disordered neighborhoods). This is consistent with known biology but the interpretation differs from the initial hypothesis: low entropy marks active transitions, not necessarily "committed" fates. Anti-correlates with scVelo confidence (r ~ -0.48) but is not redundant. Nearly uncorrelated with expression entropy (r ~ 0.02), confirming the two metrics capture independent biological information.
 
 **Open questions:**
 - Does angular velocity entropy distinguish TICs from normal stem cells in practice?
