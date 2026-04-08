@@ -81,6 +81,89 @@ Reference values (n_bins=8):
 | 30 (PCA) | 1.21 | Strong concentration near pi/2 |
 | 50 | 1.05 | Very tight concentration |
 
+## Mathematical Details
+
+### Expression Entropy (pySCE) — Markov Chain Entropy on a PPI Network
+
+The original pySCE method scores each cell's "potency" by measuring the entropy of a random walk on a protein-protein interaction (PPI) network, weighted by that cell's gene expression.
+
+**Step 1: Build a cell-specific transition matrix.**
+Given a PPI adjacency matrix `A` (genes x genes, binary edges) and a cell's expression vector `x` (one value per gene), construct a weighted transition matrix:
+
+```
+W_ij = A_ij * x_i * x_j
+P_ij = W_ij / sum_j(W_ij)
+```
+
+Each entry `P_ij` is the probability of transitioning from gene `i` to gene `j` in one step of a random walk. Genes with higher expression in the cell get more weight, so the random walk preferentially visits highly expressed genes and their PPI neighbors.
+
+**Step 2: Compute the stationary distribution.**
+The stationary distribution `pi` (the long-run fraction of time spent at each gene) is computed as:
+
+```
+pi_i = x_i * (A * x)_i / sum_j(x_j * (A * x)_j)
+```
+
+This weights each gene by its expression times the total expression of its PPI neighbors — genes that are both highly expressed and well-connected in the active network get more weight.
+
+**Step 3: Compute Markov chain entropy.**
+The entropy rate of the Markov chain is:
+
+```
+S = -sum_i pi_i * sum_j P_ij * log(P_ij)
+```
+
+This is the expected Shannon entropy of the next-step distribution, averaged over the stationary distribution. When expression is spread across many PPI-connected genes, the random walk has many possible paths and entropy is high (stem-like / multipotent). When expression is concentrated on a few genes, the walk is constrained and entropy is low (differentiated).
+
+**Step 4: Normalize.**
+The score is divided by `log(lambda_1)` where `lambda_1` is the largest eigenvalue of the PPI adjacency matrix. This normalizes the score to [0, 1] relative to the theoretical maximum entropy of the network.
+
+---
+
+### Angular Velocity Entropy (pySCEv) — Shannon Entropy of Local Velocity Directions
+
+The new velocity entropy metric scores each cell by measuring how disordered the RNA velocity directions are in its local neighborhood.
+
+**Step 1: Get velocity vectors and find neighbors.**
+For each cell `i`, take its RNA velocity projected into embedding space (e.g., UMAP) as a 2D vector `v_i`. Find the `k` nearest neighbors in embedding space (default `k=30`).
+
+**Step 2: Compute angles.**
+
+*2D embeddings (UMAP):* Convert each neighbor's velocity to an absolute angle:
+
+```
+theta_j = atan2(v_j_y, v_j_x),   theta in [0, 2pi)
+```
+
+*Higher-dimensional embeddings (PCA):* Compute all pairwise angles among the `k` neighbor velocity vectors using cosine similarity:
+
+```
+theta_jl = arccos( (v_j . v_l) / (|v_j| * |v_l|) ),   theta in [0, pi]
+```
+
+This gives `k*(k-1)/2` pairwise angles. The pairwise approach is necessary because in high dimensions there is no natural "absolute angle" reference.
+
+**Step 3: Bin and compute Shannon entropy.**
+Histogram the angles into `B` equal-width bins (default `B=8`). Compute the Shannon entropy of the resulting distribution:
+
+```
+p_b = count_b / sum(counts)
+H = -sum_b p_b * log2(p_b)
+```
+
+If all neighbors point the same way, one bin gets all the counts and `H = 0`. If directions are uniformly spread, all bins are equal and `H = log2(B)`.
+
+**Step 4: Dimension-aware normalization.**
+In 2D, the maximum entropy is simply `log2(B)` (uniform on a circle). In higher dimensions, random unit vectors don't produce uniform pairwise angles — due to *concentration of measure*, angles cluster near `pi/2` as dimensionality grows. The theoretical pairwise angle distribution is:
+
+```
+f(theta) proportional to sin^(d-2)(theta),   theta in [0, pi]
+```
+
+We integrate this density over each bin to get the expected bin probabilities for random vectors, then compute the Shannon entropy of that distribution. This is the maximum entropy for that dimensionality. Dividing by it normalizes scores to [0, 1] regardless of whether you use UMAP (2D) or PCA (30D).
+
+**Cells with zero velocity** (magnitude < 1e-10) get NaN — entropy of direction is undefined when there is no direction.
+
 ## Examples
 
 See `examples/` for validation figures:
