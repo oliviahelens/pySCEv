@@ -177,8 +177,8 @@ See `validation/` for figures:
 
 **Angular Velocity Entropy** is speculative and under active validation. The core question is whether velocity-based entropy provides biological insight that expression entropy and existing tools (e.g., scVelo's velocity confidence) do not.
 
-**What we know so far:**
-- **Synthetic:** Math is sound. Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
+**Notes so far:**
+- **Synthetic:** Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
 - **Pancreas:** Low entropy marks actively differentiating populations (Ngn3 high EP, Pre-endocrine) — coherent flow, not "committed" fates as the initial hypothesis guessed. Quiescent/terminal populations score higher.
 - **Not redundant with existing metrics:** anti-correlates with scVelo confidence (r ~ -0.48, ~77% unique variance), nearly uncorrelated with expression entropy (r ~ 0.02).
 - **Correlated with simpler mean angular deviation, r ~ 0.80 on pancreas.** Entropy captures distribution shape; mean angle only captures the first moment. The ~20% unique variance comes from multimodal neighborhoods (genuine bifurcations).
