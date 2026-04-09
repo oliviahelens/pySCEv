@@ -1,6 +1,6 @@
 # Spatial Transcriptomics: Chicken Heart Development
 
-**Status:** Planned — requires downloading external data from Zenodo (https://doi.org/10.5281/zenodo.6798659)
+**Status:** Script ready — run locally, then commit the figures back. The SIRV-processed data is on Zenodo (https://doi.org/10.5281/zenodo.6798659) and the sandbox this repo was developed in has no internet access, so the analysis script is designed to be executed on a machine that already has the data.
 
 ## Dataset
 
@@ -33,6 +33,34 @@ SIRV integrates spatial + scRNA-seq into a shared latent space, then transfers s
 4. Compute mean angular deviation on the same spatial neighbors for comparison
 5. Overlay both metrics on tissue coordinates (and H&E images if available)
 6. Compare: do entropy and mean angular deviation diverge more in spatial context than they did in UMAP context?
+
+## How to run
+
+`run_analysis.py` implements steps 2–6 end-to-end. On a machine that has pySCEv installed and the Zenodo data on disk:
+
+```bash
+# point at a single h5ad (e.g. one tissue section to prototype)
+python testing/spatial_chicken_heart/run_analysis.py \
+    --data ~/Downloads/chicken_heart_sirv/day7_section1.h5ad
+
+# or point at the whole Zenodo download directory and it will pick the first .h5ad
+python testing/spatial_chicken_heart/run_analysis.py \
+    --data-dir ~/Downloads/chicken_heart_sirv/
+```
+
+The script expects an AnnData object with:
+
+- `adata.layers['spliced']` and `adata.layers['unspliced']` (SIRV output)
+- `adata.obsm['spatial']` — 2D tissue coordinates
+
+It will compute velocity with scVelo, run `pysce.score_angular_velocity_entropy` twice (once with **spatial** neighbors, once with **UMAP** neighbors for contrast), compute mean angular deviation on the spatial neighbors, and write four figures into this directory:
+
+- `spatial_entropy_tissue.png` — entropy overlaid on tissue coordinates
+- `spatial_deviation_tissue.png` — mean angular deviation on the same spots
+- `entropy_vs_deviation_spatial.png` — scatter + correlation in the spatial context
+- `spatial_vs_umap_neighbors.png` — side-by-side of spatial vs UMAP neighbor choice
+
+Prototype on a single day-7 section before scaling to all 12 tissue sections.
 
 ## What a good result looks like
 
