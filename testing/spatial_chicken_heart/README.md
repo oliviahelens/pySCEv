@@ -1,6 +1,6 @@
 # Spatial Transcriptomics: Chicken Heart Development
 
-**Status:** Script ready — run locally, then commit the figures back. The SIRV-processed data is on Zenodo (https://doi.org/10.5281/zenodo.6798659) and the sandbox this repo was developed in has no internet access, so the analysis script is designed to be executed on a machine that already has the data.
+**Status:** Planned — requires downloading external data from Zenodo (https://doi.org/10.5281/zenodo.6798659)
 
 ## Dataset
 
