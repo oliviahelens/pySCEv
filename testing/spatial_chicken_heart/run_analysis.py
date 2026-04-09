@@ -250,6 +250,28 @@ def plot_entropy_vs_deviation(adata, out: Path):
     print(f"[plot] wrote {out}  (r={r:.3f})")
 
 
+def plot_spatial_vs_umap_scatter(adata, out: Path):
+    sp = adata.obs["angular_velocity_entropy_spatial"].to_numpy()
+    um = adata.obs["angular_velocity_entropy_umap"].to_numpy()
+    mask = np.isfinite(sp) & np.isfinite(um)
+    r = np.corrcoef(sp[mask], um[mask])[0, 1]
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.scatter(um[mask], sp[mask], s=8, alpha=0.5, linewidths=0)
+    lo = min(sp[mask].min(), um[mask].min())
+    hi = max(sp[mask].max(), um[mask].max())
+    ax.plot([lo, hi], [lo, hi], "k--", linewidth=1, alpha=0.6, label="y = x")
+    ax.set_xlabel("Angular velocity entropy (UMAP neighbors)")
+    ax.set_ylabel("Angular velocity entropy (spatial neighbors)")
+    ax.set_title(f"Pearson r = {r:.2f}  (n = {mask.sum()})")
+    ax.legend(loc="upper left", frameon=False)
+    ax.set_aspect("equal")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] wrote {out}  (r={r:.3f})")
+
+
 def plot_spatial_vs_umap(adata, out: Path):
     coords = np.asarray(adata.obsm["spatial"])
     sp = adata.obs["angular_velocity_entropy_spatial"].to_numpy()
@@ -327,6 +349,9 @@ def main():
     )
     plot_entropy_vs_deviation(adata, args.outdir / "entropy_vs_deviation_spatial.png")
     plot_spatial_vs_umap(adata, args.outdir / "spatial_vs_umap_neighbors.png")
+    plot_spatial_vs_umap_scatter(
+        adata, args.outdir / "spatial_vs_umap_entropy_scatter.png"
+    )
 
     print("[done]")
 
