@@ -8,7 +8,7 @@ The original `pysce.score` expression entropy tool is unchanged. Everything unde
 
 **Angular Velocity Entropy** (`pysce.score_angular_velocity_entropy`) — *Experimental.* For each cell, measures how coherent or disordered the RNA velocity vectors are in its local neighborhood. The hypothesis is that this may capture dynamic differences that expression entropy cannot: two cell populations with identical expression entropy could have very different velocity coherence if one is actively differentiating (coherent flow) while the other is dynamically disorganized.
 
-This is speculative — see [Status](#status) and `testing/` for validation results so far.
+This is speculative — see [Status](#status) and `validation/` for validation results so far.
 
 ## Installation
 
@@ -166,12 +166,12 @@ We integrate this density over each bin to get the expected bin probabilities fo
 
 ## Examples
 
-See `testing/` for validation figures:
+See `validation/` for figures:
 
-- **`testing/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
-- **`testing/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
-- **`testing/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Tests whether physically adjacent neighbors give different answers than UMAP neighbors. They do: r = 0.39 between the two.
-- **`testing/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman r = 0.86 across settings; cell-type ordering stable.
+- **`validation/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
+- **`validation/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
+- **`validation/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Tests whether physically adjacent neighbors give different answers than UMAP neighbors. They do: r = 0.39 between the two.
+- **`validation/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman r = 0.86 across settings; cell-type ordering stable.
 
 ## Status
 
@@ -182,12 +182,12 @@ See `testing/` for validation figures:
 - **Pancreas:** Low entropy marks actively differentiating populations (Ngn3 high EP, Pre-endocrine) — coherent flow, not "committed" fates as the initial hypothesis guessed. Quiescent/terminal populations score higher.
 - **Not redundant with existing metrics:** anti-correlates with scVelo confidence (r ~ -0.48, ~77% unique variance), nearly uncorrelated with expression entropy (r ~ 0.02).
 - **Correlated with simpler mean angular deviation, r ~ 0.80 on pancreas.** Entropy captures distribution shape; mean angle only captures the first moment. The ~20% unique variance comes from multimodal neighborhoods (genuine bifurcations).
-- **Spatial chicken heart (day 14 Visium, 1967 spots):** spatial neighbors and UMAP neighbors give meaningfully different answers (r = 0.39), so physical adjacency captures structure transcriptional adjacency doesn't. In spatial context, entropy and mean deviation diverge more (r = 0.52 vs 0.80) — more cells fall in the multimodal regime where entropy's distribution-shape sensitivity matters. Entropy traces contiguous regional zones; mean deviation looks like outlier detection on the same data.
+- **Spatial chicken heart (day 14 Visium, 1967 spots):** spatial neighbors and UMAP neighbors give meaningfully different answers (r = 0.39), so physical adjacency captures structure transcriptional adjacency doesn't. In spatial context, entropy and mean deviation diverge more (r = 0.52 vs 0.80) — more cells fall in the multimodal regime where entropy's distribution-shape sensitivity matters. Overlaying Mantri's anatomical regions: lowest entropy in the **left ventricular wall** (trabecular + endocardium, compact myocardium + septum) — the coordinated cardiomyocyte differentiation zones. Highest entropy in **valves and atria** — known developmental mixing zones where multiple divergent trajectories share physical space. Consistent with the pancreas result: low entropy = coordinated differentiation wave, high entropy = multiple divergent trajectories in proximity.
+- **Permutation control (N=100) on the chicken heart:** shuffling velocity vectors across spots and recomputing confirms the region ranking is real (Kruskal-Wallis H 329 vs null 66 ± 46, +5.7σ) but reframes the "big smooth tissue patches" claim — about two-thirds of the raw spatial autocorrelation (Moran's I null ≈ 0.47 out of observed 0.74) comes from the k-NN scoring kernel's own smoothing, regardless of biology. The biological signal is the anatomical alignment, not the patchiness itself. See `validation/spatial_chicken_heart/` for details.
 - **Parameterization is stable:** median Spearman r = 0.86 across a 5×5 sweep of k and bin count on pancreas; cell-type ordering preserved.
 
 **Open questions:**
 - Does angular velocity entropy distinguish TICs from normal stem cells in practice?
-- Do the regional zones on the chicken heart map correspond to known anatomy (epicardium, outflow tract, ventricle)? Needs Mantri cell-type/region overlay.
 - How sensitive is the metric to RNA velocity estimation noise on low-quality / multi-cell-per-spot data like Visium?
 
 This tool is provided as-is for exploration and hypothesis generation. Interpret results in the context of your specific dataset and biological question.
