@@ -4,12 +4,15 @@
 # ###################################################################################################
 
 from setuptools import setup, find_packages
-from pkg_resources import parse_requirements
 import pathlib
 
 # Read requirements text file to get required packages
 with pathlib.Path('requirements.txt').open() as reqsfile:
-    reqs = [str(req) for req in parse_requirements(reqsfile)]
+    reqs = [
+        line.strip()
+        for line in reqsfile
+        if line.strip() and not line.startswith('#')
+    ]
 
 # Setup package with params
 setup(name='pysce',
