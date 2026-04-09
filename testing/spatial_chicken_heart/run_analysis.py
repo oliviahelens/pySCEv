@@ -96,7 +96,15 @@ def compute_velocity(adata):
     import scvelo as scv
 
     print("[velocity] filter/normalize/moments")
-    scv.pp.filter_and_normalize(adata, min_shared_counts=10, n_top_genes=2000)
+    # scVelo 0.3.4's filter_and_normalize forwards n_top_genes into
+    # normalize_per_cell which rejects it, so split into steps and do
+    # HVG selection via scanpy afterwards.
+    scv.pp.filter_genes(adata, min_shared_counts=10)
+    scv.pp.normalize_per_cell(adata)
+    sc.pp.log1p(adata)
+    if adata.n_vars > 2000:
+        sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat")
+        adata._inplace_subset_var(adata.var["highly_variable"].to_numpy())
     scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
 
     print("[velocity] stochastic velocity + graph")
