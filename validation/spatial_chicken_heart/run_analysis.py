@@ -718,16 +718,38 @@ def run_permutation_test(adata, args):
     else:
         p_kw = float("nan")
 
-    # Expected value of Moran's I under spatial randomness with row-standardized
-    # weights: E[I] = -1 / (n - 1). Print for sanity-checking the null.
-    expected_I = -1.0 / (n - 1)
+    # The null here is NOT "random values on a lattice" (for which E[I] would
+    # be -1/(n-1)). It's the entropy field produced by the scoring function
+    # when velocities are randomly assigned to spots — and that field is
+    # already spatially smoothed by the k-NN scoring kernel regardless of
+    # biology. So null Moran's I is expected to be well above zero, and the
+    # whole point of the control is to measure that "free" autocorrelation.
+    ni = null_I[np.isfinite(null_I)]
+    null_I_mean = float(ni.mean()) if ni.size else float("nan")
+    null_I_std = float(ni.std()) if ni.size else float("nan")
+    gap_I = (
+        (observed_I - null_I_mean) / null_I_std
+        if ni.size and null_I_std > 0
+        else float("nan")
+    )
     print(
-        f"[perm] null Moran's I mean = {np.nanmean(null_I):.4f}  "
-        f"(expected ~{expected_I:.4f})"
+        f"[perm] null Moran's I = {null_I_mean:.4f} +/- {null_I_std:.4f}  "
+        f"(observed - null) / std = {gap_I:+.2f}"
     )
     print(f"[perm] p(Moran's I >= observed) = {p_I:.4f}")
     if has_regions:
-        print(f"[perm] null KW H mean = {np.nanmean(null_kw):.2f}")
+        nk = null_kw[np.isfinite(null_kw)]
+        null_kw_mean = float(nk.mean()) if nk.size else float("nan")
+        null_kw_std = float(nk.std()) if nk.size else float("nan")
+        gap_kw = (
+            (observed_kw - null_kw_mean) / null_kw_std
+            if nk.size and null_kw_std > 0
+            else float("nan")
+        )
+        print(
+            f"[perm] null KW H    = {null_kw_mean:.2f} +/- {null_kw_std:.2f}  "
+            f"(observed - null) / std = {gap_kw:+.2f}"
+        )
         print(f"[perm] p(KW H >= observed) = {p_kw:.4f}")
 
     # Save artifacts
@@ -759,12 +781,19 @@ def run_permutation_test(adata, args):
         f.write(f"n spots        : {n}\n")
         f.write(f"k neighbors    : {args.n_neighbors}\n")
         f.write(f"n bins         : {args.n_bins}\n")
-        f.write("p-values are one-sided (observed >= null).\n\n")
+        f.write("p-values are one-sided (observed >= null).\n")
+        f.write(
+            "Note: the null field is NOT random values on a lattice. It is\n"
+            "the entropy field produced by the scoring function when velocity\n"
+            "vectors are randomly assigned to spots. The k-NN scoring kernel\n"
+            "already spatially smooths the entropy regardless of biology, so\n"
+            "the null Moran's I is expected to be well above zero. The gap\n"
+            "between observed and null is what indicates biological signal.\n\n"
+        )
 
         f.write("Moran's I\n")
         f.write("-" * 40 + "\n")
         f.write(f"observed : {observed_I:.6f}\n")
-        f.write(f"expected (spatial randomness, -1/(n-1)) : {expected_I:.6f}\n")
         if finite_I.any():
             ni = null_I[finite_I]
             f.write(f"null mean   : {ni.mean():.6f}\n")
