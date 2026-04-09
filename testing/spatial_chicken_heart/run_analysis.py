@@ -133,8 +133,12 @@ def compute_velocity(adata):
     print("[velocity] scvelo moments (reusing PCA + neighbors)")
     scv.pp.moments(adata, n_pcs=None, n_neighbors=None)
 
-    print("[velocity] stochastic velocity")
-    scv.tl.velocity(adata, mode="stochastic")
+    print("[velocity] deterministic velocity")
+    # Stochastic mode has a numpy 2.x incompatibility in scvelo 0.3.4
+    # (ragged array assignment in leastsq_generalized). Deterministic
+    # mode uses a simpler regression path and is sufficient for angular
+    # structure analysis.
+    scv.tl.velocity(adata, mode="deterministic")
 
     print("[velocity] velocity graph")
     scv.tl.velocity_graph(adata, n_jobs=1)
