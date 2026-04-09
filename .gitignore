@@ -163,6 +163,6 @@ cython_debug/
 data/
 
 
-# Generated figures (except examples)
+# Generated figures (except testing)
 *.png
-!examples/**/*.png
+!testing/**/*.png

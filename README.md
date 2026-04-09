@@ -8,7 +8,7 @@ The original `pysce.score` expression entropy tool is unchanged. Everything unde
 
 **Angular Velocity Entropy** (`pysce.score_angular_velocity_entropy`) — *Experimental.* For each cell, measures how coherent or disordered the RNA velocity vectors are in its local neighborhood. The hypothesis is that this may capture dynamic differences that expression entropy cannot: two cell populations with identical expression entropy could have very different velocity coherence if one is actively differentiating (coherent flow) while the other is dynamically disorganized.
 
-This is speculative — see [Status](#status) and `examples/` for validation results so far.
+This is speculative — see [Status](#status) and `testing/` for validation results so far.
 
 ## Installation
 
@@ -166,10 +166,10 @@ We integrate this density over each bin to get the expected bin probabilities fo
 
 ## Examples
 
-See `examples/` for validation figures:
+See `testing/` for validation figures:
 
-- **`examples/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
-- **`examples/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
+- **`testing/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
+- **`testing/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
 
 ## Status
 
