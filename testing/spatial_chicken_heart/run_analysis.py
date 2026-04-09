@@ -51,19 +51,42 @@ def load_adata(data: Path | None, data_dir: Path | None):
     print(f"[load] reading {path}")
     adata = sc.read_h5ad(path)
     print(f"[load] {adata.n_obs} spots x {adata.n_vars} genes")
+    print(f"[load] layers: {list(adata.layers.keys())}")
+    print(f"[load] obsm:   {list(adata.obsm.keys())}")
 
-    # SIRV-imputed output should have spliced/unspliced layers
-    if "spliced" not in adata.layers or "unspliced" not in adata.layers:
-        sys.exit(
-            "Expected 'spliced' and 'unspliced' layers (SIRV output). "
-            f"Found layers: {list(adata.layers.keys())}"
-        )
+    # SIRV-imputed output should have spliced/unspliced layers.
+    # Accept a few known alternate names.
+    layer_aliases = {
+        "spliced": ["spliced", "Ms", "S", "s"],
+        "unspliced": ["unspliced", "Mu", "U", "u"],
+    }
+    for canonical, options in layer_aliases.items():
+        if canonical in adata.layers:
+            continue
+        for alt in options:
+            if alt in adata.layers:
+                print(f"[load] aliasing layer '{alt}' -> '{canonical}'")
+                adata.layers[canonical] = adata.layers[alt]
+                break
+        else:
+            sys.exit(
+                f"No '{canonical}' layer found (tried {options}). "
+                f"Layers present: {list(adata.layers.keys())}"
+            )
 
+    # Spatial coordinates — accept common alternate obsm keys
+    spatial_aliases = ["spatial", "X_spatial", "X_xy_loc", "xy_loc"]
     if "spatial" not in adata.obsm:
-        sys.exit(
-            "Expected spatial coordinates in adata.obsm['spatial']. "
-            f"Found obsm: {list(adata.obsm.keys())}"
-        )
+        for alt in spatial_aliases:
+            if alt in adata.obsm:
+                print(f"[load] aliasing obsm '{alt}' -> 'spatial'")
+                adata.obsm["spatial"] = adata.obsm[alt]
+                break
+        else:
+            sys.exit(
+                "No spatial coordinates found. Tried "
+                f"{spatial_aliases}. Present: {list(adata.obsm.keys())}"
+            )
 
     return adata
 
