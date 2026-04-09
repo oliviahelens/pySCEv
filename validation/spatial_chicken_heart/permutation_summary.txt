@@ -1,0 +1,44 @@
+Permutation control for spatial chicken heart entropy
+============================================================
+
+n permutations : 100
+base seed      : 0
+n spots        : 1967
+k neighbors    : 30
+n bins         : 8
+p-values are one-sided (observed >= null).
+Note: the null field is NOT random values on a lattice. It is
+the entropy field produced by the scoring function when velocity
+vectors are randomly assigned to spots. The k-NN scoring kernel
+already spatially smooths the entropy regardless of biology, so
+the null Moran's I is expected to be well above zero. The gap
+between observed and null is what indicates biological signal.
+
+Moran's I
+----------------------------------------
+observed : 0.741456
+null mean   : 0.469100
+null std    : 0.040653
+null 5 / 50 / 95 percentile : 0.398908  0.472885  0.528190
+null max    : 0.568851
+p-value     : 0.0099
+
+Kruskal-Wallis H across regions (n >= 15)
+----------------------------------------
+observed H  : 329.1955
+n groups    : 6
+null mean   : 65.7565
+null std    : 45.8809
+null 5 / 50 / 95 percentile : 20.3571  55.9045  130.3567
+null max    : 321.3091
+p-value     : 0.0099
+
+Per-region medians (observed vs null mean / 5 / 95)
+----------------------------------------
+region                                        obs  null_mean   null_5  null_95
+Atria                                       0.717      0.734    0.705    0.762
+Compact LV and  inter-ventricular septum    0.598      0.733    0.715    0.751
+Epicardium                                  0.688      0.733    0.701    0.768
+Right ventricle                             0.649      0.737    0.708    0.764
+Trabecular LV and  endocardium              0.505      0.734    0.702    0.761
+Valves                                      0.745      0.733    0.690    0.767
