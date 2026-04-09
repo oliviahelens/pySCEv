@@ -170,22 +170,25 @@ See `testing/` for validation figures:
 
 - **`testing/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
 - **`testing/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
+- **`testing/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Tests whether physically adjacent neighbors give different answers than UMAP neighbors. They do: r = 0.39 between the two.
+- **`testing/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman r = 0.86 across settings; cell-type ordering stable.
 
 ## Status
 
 **Angular Velocity Entropy** is speculative and under active validation. The core question is whether velocity-based entropy provides biological insight that expression entropy and existing tools (e.g., scVelo's velocity confidence) do not.
 
 **What we know so far:**
-- Synthetic validation: Math is sound. Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
-- Pancreas endocrinogenesis: The metric captures meaningful structure — actively differentiating populations (Ngn3 high EP, Pre-endocrine) show low angular entropy (coherent flow), while quiescent or terminal populations show higher entropy (disordered neighborhoods). This is consistent with known biology but the interpretation differs from the initial hypothesis: low entropy marks active transitions, not necessarily "committed" fates.
-- Anti-correlates with scVelo confidence (r ~ -0.48) but is not redundant (~77% unique variance).
-- Nearly uncorrelated with expression entropy (r ~ 0.02), confirming the two metrics capture independent biological information.
-- Highly correlated with simpler mean angular deviation (r ~ 0.80). The entropy formulation captures the full distribution shape (e.g., bimodal splits at bifurcation points), while mean angle only captures the first moment. In practice, most cells have unimodal neighbor angle distributions, so the two track closely. The ~20% unique variance in entropy likely comes from genuine bifurcation/decision points where the angle distribution is multimodal.
+- **Synthetic:** Math is sound. Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
+- **Pancreas:** Low entropy marks actively differentiating populations (Ngn3 high EP, Pre-endocrine) — coherent flow, not "committed" fates as the initial hypothesis guessed. Quiescent/terminal populations score higher.
+- **Not redundant with existing metrics:** anti-correlates with scVelo confidence (r ~ -0.48, ~77% unique variance), nearly uncorrelated with expression entropy (r ~ 0.02).
+- **Correlated with simpler mean angular deviation, r ~ 0.80 on pancreas.** Entropy captures distribution shape; mean angle only captures the first moment. The ~20% unique variance comes from multimodal neighborhoods (genuine bifurcations).
+- **Spatial chicken heart (day 14 Visium, 1967 spots):** spatial neighbors and UMAP neighbors give meaningfully different answers (r = 0.39), so physical adjacency captures structure transcriptional adjacency doesn't. In spatial context, entropy and mean deviation diverge more (r = 0.52 vs 0.80) — more cells fall in the multimodal regime where entropy's distribution-shape sensitivity matters. Entropy traces contiguous regional zones; mean deviation looks like outlier detection on the same data.
+- **Parameterization is stable:** median Spearman r = 0.86 across a 5×5 sweep of k and bin count on pancreas; cell-type ordering preserved.
 
 **Open questions:**
 - Does angular velocity entropy distinguish TICs from normal stem cells in practice?
-- Given the high correlation with mean angular deviation, does the entropy formulation's sensitivity to multimodal distributions provide meaningful additional biological insight, or would the simpler metric suffice?
-- How sensitive is the metric to RNA velocity estimation noise, neighbor count, and bin count?
+- Do the regional zones on the chicken heart map correspond to known anatomy (epicardium, outflow tract, ventricle)? Needs Mantri cell-type/region overlay.
+- How sensitive is the metric to RNA velocity estimation noise on low-quality / multi-cell-per-spot data like Visium?
 
 This tool is provided as-is for exploration and hypothesis generation. Interpret results in the context of your specific dataset and biological question.
 
