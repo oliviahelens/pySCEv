@@ -183,11 +183,11 @@ See `validation/` for figures:
 - **Not redundant with existing metrics:** anti-correlates with scVelo confidence (r ~ -0.48, ~77% unique variance), nearly uncorrelated with expression entropy (r ~ 0.02).
 - **Correlated with simpler mean angular deviation, r ~ 0.80 on pancreas.** Entropy captures distribution shape; mean angle only captures the first moment. The ~20% unique variance comes from multimodal neighborhoods (genuine bifurcations).
 - **Spatial chicken heart (day 14 Visium, 1967 spots):** spatial neighbors and UMAP neighbors give meaningfully different answers (r = 0.39), so physical adjacency captures structure transcriptional adjacency doesn't. In spatial context, entropy and mean deviation diverge more (r = 0.52 vs 0.80) — more cells fall in the multimodal regime where entropy's distribution-shape sensitivity matters. Overlaying Mantri's anatomical regions: lowest entropy in the **left ventricular wall** (trabecular + endocardium, compact myocardium + septum) — the coordinated cardiomyocyte differentiation zones. Highest entropy in **valves and atria** — known developmental mixing zones where multiple divergent trajectories share physical space. Consistent with the pancreas result: low entropy = coordinated differentiation wave, high entropy = multiple divergent trajectories in proximity.
+- **Permutation control (N=100) on the chicken heart:** shuffling velocity vectors across spots and recomputing confirms the region ranking is real (Kruskal-Wallis H 329 vs null 66 ± 46, +5.7σ) but reframes the "big smooth tissue patches" claim — about two-thirds of the raw spatial autocorrelation (Moran's I null ≈ 0.47 out of observed 0.74) comes from the k-NN scoring kernel's own smoothing, regardless of biology. The biological signal is the anatomical alignment, not the patchiness itself. See `validation/spatial_chicken_heart/` for details.
 - **Parameterization is stable:** median Spearman r = 0.86 across a 5×5 sweep of k and bin count on pancreas; cell-type ordering preserved.
 
 **Open questions:**
 - Does angular velocity entropy distinguish TICs from normal stem cells in practice?
-- Do the regional zones on the chicken heart map correspond to known anatomy (epicardium, outflow tract, ventricle)? Needs Mantri cell-type/region overlay.
 - How sensitive is the metric to RNA velocity estimation noise on low-quality / multi-cell-per-spot data like Visium?
 
 This tool is provided as-is for exploration and hypothesis generation. Interpret results in the context of your specific dataset and biological question.
