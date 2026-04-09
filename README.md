@@ -8,7 +8,7 @@ The original `pysce.score` expression entropy tool is unchanged. Everything unde
 
 **Angular Velocity Entropy** (`pysce.score_angular_velocity_entropy`) — *Experimental.* For each cell, measures how coherent or disordered the RNA velocity vectors are in its local neighborhood. The hypothesis is that this may capture dynamic differences that expression entropy cannot: two cell populations with identical expression entropy could have very different velocity coherence if one is actively differentiating (coherent flow) while the other is dynamically disorganized.
 
-This is speculative — see [Status](#status) and `testing/` for validation results so far.
+This is speculative — see [Status](#status) and `validation/` for validation results so far.
 
 ## Installation
 
@@ -166,12 +166,12 @@ We integrate this density over each bin to get the expected bin probabilities fo
 
 ## Examples
 
-See `testing/` for validation figures:
+See `validation/` for figures:
 
-- **`testing/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
-- **`testing/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
-- **`testing/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Tests whether physically adjacent neighbors give different answers than UMAP neighbors. They do: r = 0.39 between the two.
-- **`testing/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman r = 0.86 across settings; cell-type ordering stable.
+- **`validation/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
+- **`validation/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
+- **`validation/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Tests whether physically adjacent neighbors give different answers than UMAP neighbors. They do: r = 0.39 between the two.
+- **`validation/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman r = 0.86 across settings; cell-type ordering stable.
 
 ## Status
 

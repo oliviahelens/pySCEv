@@ -3,7 +3,7 @@ Spatial angular velocity entropy on chicken heart Visium data.
 
 Runs locally — expects SIRV-imputed chicken heart data (Mantri et al. 2021,
 pre-processed by SIRV: https://doi.org/10.5281/zenodo.6798659) to already
-exist on disk. Produces the figures for testing/spatial_chicken_heart/.
+exist on disk. Produces the figures for validation/spatial_chicken_heart/.
 
 Usage
 -----

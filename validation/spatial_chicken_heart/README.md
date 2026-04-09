@@ -17,7 +17,7 @@
 
 ```bash
 KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
-  python testing/spatial_chicken_heart/run_analysis.py \
+  python validation/spatial_chicken_heart/run_analysis.py \
   --data /path/to/Visium_D14_adata.h5ad
 ```
 
