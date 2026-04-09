@@ -304,6 +304,116 @@ def plot_spatial_vs_umap(adata, out: Path):
     print(f"[plot] wrote {out}")
 
 
+def plot_annotation_overlay(adata, annotation_col: str, out: Path):
+    """Two-panel tissue map: annotation labels (left) + entropy (right)."""
+    coords = np.asarray(adata.obsm["spatial"])
+    labels = adata.obs[annotation_col].astype(str).to_numpy()
+    ent = adata.obs["angular_velocity_entropy_spatial"].to_numpy()
+    unique_labels = sorted(np.unique(labels).tolist())
+
+    # Pick a categorical colormap with enough colors
+    n = len(unique_labels)
+    if n <= 10:
+        cmap = plt.get_cmap("tab10")
+    elif n <= 20:
+        cmap = plt.get_cmap("tab20")
+    else:
+        cmap = plt.get_cmap("gist_ncar")
+    label_to_color = {lab: cmap(i % cmap.N) for i, lab in enumerate(unique_labels)}
+    point_colors = np.array([label_to_color[l] for l in labels])
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 6))
+
+    # Left: annotation
+    axes[0].scatter(
+        coords[:, 0], coords[:, 1], c=point_colors, s=14, linewidths=0
+    )
+    axes[0].set_aspect("equal")
+    axes[0].invert_yaxis()
+    axes[0].set_xticks([]); axes[0].set_yticks([])
+    axes[0].set_title(annotation_col.replace("_", " ").title())
+    handles = [
+        plt.Line2D([0], [0], marker="o", color="w",
+                   markerfacecolor=label_to_color[l], markersize=8,
+                   label=l.replace("\n", " "))
+        for l in unique_labels
+    ]
+    axes[0].legend(
+        handles=handles, loc="center left", bbox_to_anchor=(1.02, 0.5),
+        fontsize=8, frameon=False,
+    )
+
+    # Right: entropy
+    finite = np.isfinite(ent)
+    axes[1].scatter(
+        coords[~finite, 0], coords[~finite, 1],
+        s=12, c="lightgray", linewidths=0,
+    )
+    pc = axes[1].scatter(
+        coords[finite, 0], coords[finite, 1],
+        c=ent[finite], s=14, cmap="viridis", vmin=0, vmax=1, linewidths=0,
+    )
+    axes[1].set_aspect("equal")
+    axes[1].invert_yaxis()
+    axes[1].set_xticks([]); axes[1].set_yticks([])
+    axes[1].set_title("Angular velocity entropy (spatial neighbors)")
+    cb = fig.colorbar(pc, ax=axes[1], fraction=0.046, pad=0.04)
+    cb.solids.set_alpha(1.0)
+
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] wrote {out}")
+
+
+def plot_entropy_by_group(adata, group_col: str, out: Path, title: str | None = None):
+    """Box plot of spatial entropy distribution per group, ordered by median."""
+    ent = adata.obs["angular_velocity_entropy_spatial"].to_numpy()
+    groups = adata.obs[group_col].astype(str).to_numpy()
+    mask = np.isfinite(ent)
+    ent = ent[mask]
+    groups = groups[mask]
+
+    unique_groups = np.unique(groups)
+    values_per_group = [ent[groups == g] for g in unique_groups]
+    medians = [np.median(v) for v in values_per_group]
+    order = np.argsort(medians)
+    sorted_groups = [unique_groups[i] for i in order]
+    sorted_values = [values_per_group[i] for i in order]
+    sorted_medians = [medians[i] for i in order]
+
+    fig, ax = plt.subplots(figsize=(max(7, 0.6 * len(sorted_groups) + 4), 5))
+    bp = ax.boxplot(
+        sorted_values, vert=True, patch_artist=True,
+        showfliers=False, widths=0.6,
+    )
+    # Color boxes by median entropy (same cmap as tissue map)
+    cmap = plt.get_cmap("viridis")
+    for patch, m in zip(bp["boxes"], sorted_medians):
+        patch.set_facecolor(cmap(np.clip(m, 0, 1)))
+        patch.set_alpha(0.85)
+    for median_line in bp["medians"]:
+        median_line.set_color("black")
+
+    labels = [g.replace("\n", " ") for g in sorted_groups]
+    ax.set_xticks(range(1, len(labels) + 1))
+    ax.set_xticklabels(labels, rotation=30, ha="right")
+    ax.set_ylabel("Angular velocity entropy (spatial neighbors)")
+    ax.set_ylim(0, 1)
+    ax.axhline(np.median(ent), color="gray", linestyle="--", linewidth=1,
+               label=f"overall median = {np.median(ent):.2f}")
+    ax.legend(loc="upper left", frameon=False, fontsize=8)
+    ax.set_title(title or f"Entropy by {group_col}")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    # Print ranked medians for quick reference in the terminal
+    print(f"[plot] wrote {out}")
+    print(f"  {group_col} medians (low -> high entropy):")
+    for lab, m, v in zip(labels, sorted_medians, sorted_values):
+        print(f"    {m:.3f}  n={len(v):4d}  {lab}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", type=Path, default=None, help="Single .h5ad file")
@@ -352,6 +462,28 @@ def main():
     plot_spatial_vs_umap_scatter(
         adata, args.outdir / "spatial_vs_umap_entropy_scatter.png"
     )
+
+    # Anatomical region / cell-type overlays if annotations are present.
+    # SIRV-imputed Mantri files ship with 'region' and 'celltype_prediction'.
+    if "region" in adata.obs.columns:
+        plot_annotation_overlay(
+            adata, "region", args.outdir / "region_vs_entropy_tissue.png"
+        )
+        plot_entropy_by_group(
+            adata, "region", args.outdir / "entropy_by_region.png",
+            title="Angular velocity entropy by anatomical region",
+        )
+    else:
+        print("[plot] skipping region overlay (no 'region' column in obs)")
+
+    if "celltype_prediction" in adata.obs.columns:
+        plot_entropy_by_group(
+            adata, "celltype_prediction",
+            args.outdir / "entropy_by_celltype.png",
+            title="Angular velocity entropy by predicted cell type",
+        )
+    else:
+        print("[plot] skipping celltype overlay (no 'celltype_prediction' column)")
 
     print("[done]")
 
