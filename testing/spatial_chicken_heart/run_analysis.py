@@ -296,9 +296,6 @@ def main():
 
     print("[score] angular velocity entropy with spatial neighbors")
     score_with_spatial_neighbors(adata, args.n_neighbors, args.n_bins)
-    adata.obs["angular_velocity_entropy_spatial"] = adata.obs[
-        "angular_velocity_entropy_spatial_basis"
-    ]
 
     print("[score] angular velocity entropy with UMAP neighbors (for contrast)")
     pysce.score_angular_velocity_entropy(
