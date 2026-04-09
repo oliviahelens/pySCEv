@@ -92,27 +92,55 @@ def load_adata(data: Path | None, data_dir: Path | None):
 
 
 def compute_velocity(adata):
-    """Run scVelo pipeline and project onto UMAP."""
+    """Run scVelo pipeline and project onto UMAP.
+
+    Pre-computes PCA and neighbors via scanpy so scVelo's moments step
+    reuses them — the deprecated auto path in scvelo 0.4+ segfaults on
+    macOS ARM via pynndescent.
+    """
     import scvelo as scv
 
-    print("[velocity] filter/normalize/moments")
-    # scVelo 0.3.4's filter_and_normalize forwards n_top_genes into
-    # normalize_per_cell which rejects it, so split into steps and do
-    # HVG selection via scanpy afterwards.
+    print("[velocity] filter genes")
     scv.pp.filter_genes(adata, min_shared_counts=10)
-    scv.pp.normalize_per_cell(adata)
-    sc.pp.log1p(adata)
+
+    # SIRV output is typically already log-normalized. Re-normalizing is
+    # harmless (scvelo's normalize_per_cell no-ops when it detects that),
+    # but log1p on already-logged data is NOT. Only log if scanpy hasn't
+    # recorded a log1p step and X values look like raw/normalized counts.
+    already_logged = "log1p" in adata.uns
+    if not already_logged:
+        max_val = float(adata.X.max())
+        if max_val > 50:  # heuristic: raw or cp10k, not logged
+            print("[velocity] normalize + log1p")
+            scv.pp.normalize_per_cell(adata)
+            sc.pp.log1p(adata)
+        else:
+            print(f"[velocity] X looks log-scaled (max={max_val:.2f}), skipping log1p")
+    else:
+        print("[velocity] adata.uns['log1p'] present, skipping log1p")
+
     if adata.n_vars > 2000:
+        print("[velocity] HVG selection (2000)")
         sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat")
         adata._inplace_subset_var(adata.var["highly_variable"].to_numpy())
-    scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
 
-    print("[velocity] stochastic velocity + graph")
+    print("[velocity] PCA (scanpy)")
+    sc.pp.pca(adata, n_comps=30)
+
+    print("[velocity] neighbors (scanpy)")
+    sc.pp.neighbors(adata, n_neighbors=30, n_pcs=30)
+
+    print("[velocity] scvelo moments (reusing PCA + neighbors)")
+    scv.pp.moments(adata, n_pcs=None, n_neighbors=None)
+
+    print("[velocity] stochastic velocity")
     scv.tl.velocity(adata, mode="stochastic")
-    scv.tl.velocity_graph(adata)
+
+    print("[velocity] velocity graph")
+    scv.tl.velocity_graph(adata, n_jobs=1)
 
     if "X_umap" not in adata.obsm:
-        print("[velocity] computing UMAP (needed as velocity direction basis)")
+        print("[velocity] UMAP (direction basis)")
         sc.tl.umap(adata)
 
     print("[velocity] projecting velocity onto UMAP")
