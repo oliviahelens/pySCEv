@@ -366,8 +366,16 @@ def plot_annotation_overlay(adata, annotation_col: str, out: Path):
     print(f"[plot] wrote {out}")
 
 
-def plot_entropy_by_group(adata, group_col: str, out: Path, title: str | None = None):
-    """Box plot of spatial entropy distribution per group, ordered by median."""
+def plot_entropy_by_group(
+    adata, group_col: str, out: Path,
+    title: str | None = None, min_n: int = 15,
+):
+    """Box plot of spatial entropy distribution per group, ordered by median.
+
+    Groups with fewer than `min_n` spots are dropped from the plot (their
+    medians are noise) but still printed in the stdout ranking with a
+    '[skipped: small n]' note.
+    """
     ent = adata.obs["angular_velocity_entropy_spatial"].to_numpy()
     groups = adata.obs[group_col].astype(str).to_numpy()
     mask = np.isfinite(ent)
@@ -375,12 +383,23 @@ def plot_entropy_by_group(adata, group_col: str, out: Path, title: str | None = 
     groups = groups[mask]
 
     unique_groups = np.unique(groups)
-    values_per_group = [ent[groups == g] for g in unique_groups]
-    medians = [np.median(v) for v in values_per_group]
-    order = np.argsort(medians)
-    sorted_groups = [unique_groups[i] for i in order]
-    sorted_values = [values_per_group[i] for i in order]
-    sorted_medians = [medians[i] for i in order]
+    all_values = [ent[groups == g] for g in unique_groups]
+    all_medians = [np.median(v) for v in all_values]
+
+    # Filter out small groups for the plot, but remember them for the printout
+    plot_groups, plot_values, plot_medians = [], [], []
+    skipped = []
+    for g, v, m in zip(unique_groups, all_values, all_medians):
+        if len(v) >= min_n:
+            plot_groups.append(g); plot_values.append(v); plot_medians.append(m)
+        else:
+            skipped.append((g, len(v), m))
+
+    # Sort plotted groups by median
+    order = np.argsort(plot_medians)
+    sorted_groups = [plot_groups[i] for i in order]
+    sorted_values = [plot_values[i] for i in order]
+    sorted_medians = [plot_medians[i] for i in order]
 
     fig, ax = plt.subplots(figsize=(max(7, 0.6 * len(sorted_groups) + 4), 5))
     bp = ax.boxplot(
@@ -409,9 +428,13 @@ def plot_entropy_by_group(adata, group_col: str, out: Path, title: str | None = 
     plt.close(fig)
     # Print ranked medians for quick reference in the terminal
     print(f"[plot] wrote {out}")
-    print(f"  {group_col} medians (low -> high entropy):")
+    print(f"  {group_col} medians (low -> high entropy, n >= {min_n}):")
     for lab, m, v in zip(labels, sorted_medians, sorted_values):
         print(f"    {m:.3f}  n={len(v):4d}  {lab}")
+    if skipped:
+        print(f"  {group_col} skipped (n < {min_n}):")
+        for g, n, m in sorted(skipped, key=lambda x: x[2]):
+            print(f"    {m:.3f}  n={n:4d}  {g.replace(chr(10), ' ')}")
 
 
 def main():

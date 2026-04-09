@@ -1,6 +1,6 @@
 # Spatial Transcriptomics: Chicken Heart Development
 
-**Status:** First pass complete on day-14 SIRV-imputed Visium section (1967 spots). Follow-ups noted below.
+**Status:** First pass complete on day-14 SIRV-imputed Visium section (1967 spots), including Mantri region + cell-type overlays. Follow-ups noted below.
 
 ## Dataset
 
@@ -37,19 +37,53 @@ Down from r = 0.80 on pancreas (UMAP neighbors). In spatial context the two metr
 
 ### Tissue maps
 
-- `spatial_entropy_tissue.png` — shows regional structure, not noise. Dark (coherent-flow) rim along one edge, broader mid-to-high entropy interior. Smooth contiguous zones, not speckle.
+- `spatial_entropy_tissue.png` — shows regional structure, not noise. Dark (coherent-flow) zones along the ventricular wall, broader mid-to-high entropy interior. Smooth contiguous zones, not speckle.
 - `spatial_deviation_tissue.png` — mostly low with scattered bright outliers. Does **not** trace the same regional structure the entropy map shows. On this dataset the first-moment metric looks more like outlier detection than tissue zoning; entropy is the more informative of the two.
+
+### Anatomical regions (Mantri labels, n=1967)
+
+Ranked by median entropy (low → high):
+
+| median | n   | region                                   |
+|--------|-----|------------------------------------------|
+| 0.505  | 188 | Trabecular LV + endocardium              |
+| 0.598  | 693 | Compact LV + inter-ventricular septum    |
+| 0.649  | 286 | Right ventricle                          |
+| 0.688  | 130 | Epicardium                               |
+| 0.717  | 454 | Atria                                    |
+| 0.745  | 216 | Valves                                   |
+
+**Read:** the lowest-entropy regions are the **left ventricular wall** — both the trabecular + endocardial layer and the compact myocardium + septum. These are the mechanically committed cardiomyocyte zones at day 14, where local neighborhoods are dominated by a single coordinated differentiation/maturation program → coherent velocity flow → low entropy. The right ventricle is intermediate. The **highest-entropy regions are valves and atria**, both known developmental mixing zones: valves are the site of endocardial-to-mesenchymal transition and fibroblast infiltration, atria contain mixed myocardial + conductive populations. Physically adjacent spots there are heading in different transcriptional directions.
+
+Note: **epicardium sits at the median**, not low. An earlier guess that "low entropy = EMT" was wrong; the correct statement appears to be "low entropy = coordinated differentiation wave in committed tissue; high entropy = multiple divergent trajectories in physical proximity." This is consistent with the pancreas result (Ngn3-high EP, the coordinated wave, was lowest there too).
+
+### Cell types (Mantri predictions, only n ≥ 15 groups)
+
+| median | n   | cell type                 |
+|--------|-----|---------------------------|
+| 0.524  | 101 | TMSB4X high cells         |
+| 0.598  | 203 | Immature myocardial cells |
+| 0.621  | 241 | Erythrocytes              |
+| 0.623  |  46 | Mural cells               |
+| 0.635  | 977 | Cardiomyocytes-1          |
+| 0.714  |  28 | Endocardial cells         |
+| 0.741  |  77 | Vascular endothelial cells|
+| 0.751  |  20 | Valve cells               |
+| 0.755  | 264 | Fibroblast cells          |
+
+(Skipped for tiny n: Cardiomyocytes-2 n=1, Macrophages n=3, Epi-epithelial n=6.)
+
+**Consistent with the region story.** Lowest: TMSB4X-high cells (thymosin β4+, a cardiac progenitor / regeneration marker — actively maturing population) and immature myocardial cells. Highest: fibroblast and valve cells (the divergent-trajectory populations). Erythrocytes are interesting at mid-low — probably noise, they have little meaningful velocity signal.
 
 ## Caveats
 
-- **No cell-type / anatomical overlay.** Can say "entropy highlights contiguous tissue zones," can't say "that rim is epicardium undergoing EMT." Needs Mantri's regional annotations to make a biological claim.
 - **Velocity direction basis is UMAP-of-Visium.** Visium spots are multi-cellular, UMAP structure is weaker than on scRNA-seq; direction vectors inherit that weakness. Consider redoing with high-dim angular entropy in PCA space.
 - **Deterministic mode, not stochastic.** scVelo + numpy 2.x bug. Shouldn't affect angular structure but is a footnote.
 - **One section, one developmental stage.** Day 14. Should replicate across the other 11 sections and earlier stages (day 4–10 is where the most active differentiation happens).
 
 ## Next steps
 
-- Load Mantri cell-type / region labels and overlay on entropy map → biological interpretation
 - Redo with PCA-space velocity (not UMAP-projected) to strengthen the direction signal
-- Scale to all 12 sections; look at whether entropy patterns evolve across developmental time
+- Scale to earlier developmental stages (day 4, 7, 10) where the epicardium is actively undergoing EMT; check whether the epicardium stratifies lower than at day 14 when EMT is largely complete
 - Sanity check: permute velocity vectors within tissue and confirm the regional pattern collapses
+- Statistical test on the region ranking (Kruskal–Wallis + pairwise Mann–Whitney) to report actual p-values rather than just median ordering
