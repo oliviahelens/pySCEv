@@ -1,36 +1,25 @@
 # Parameterization Robustness
 
-**Status:** Not yet started
+**Status:** Complete (pancreas dataset)
 
-## Goal
+## Results Summary
 
-Test whether angular velocity entropy results are stable across parameter choices, or if they're sensitive to specific settings. A robust metric should give consistent biological conclusions across reasonable parameter ranges.
+Tested all combinations of k neighbors (5, 10, 15, 20, 30) and bin counts (8, 12, 18, 24, 36) on the pancreas endocrinogenesis dataset (3,696 cells).
 
-## Parameter sweep
+**Rank correlation across settings:**
+- Min: 0.70 (comparing extreme settings like k=5,b=36 vs k=30,b=8)
+- Median: 0.86
+- Mean: 0.86
+- Max: 0.99 (adjacent settings)
 
-| Parameter | Values to test | Default |
-|---|---|---|
-| `n_neighbors` | 5, 10, 15, 20, 30 | 30 |
-| `n_bins` | 8, 12, 18, 24, 36 | 8 |
-| `normalize` | True, False | True |
+**Cell-type ordering:** Stable across all tested settings. Ngn3 high EP and Pre-endocrine consistently rank lowest (most coherent flow), Alpha and Delta consistently rank highest (most disordered). The relative ordering of cell types is preserved even when absolute entropy values shift.
 
-## Analysis plan
+**Bin count vs k neighbors:** Bin count has less impact than k. Varying bins at fixed k=30 produces tight, parallel curves. Varying k at fixed bins=8 shows more spread, especially at low k where the neighborhood is small and noisy.
 
-1. Run angular velocity entropy across all parameter combinations on at least two datasets:
-   - Pancreas endocrinogenesis (scRNA-seq, already validated)
-   - Chicken heart spatial (once spatial testing is set up)
-2. For each pair of parameter settings, compute **Spearman rank correlation** between the per-cell scores — this tests whether the relative ordering of cells is preserved even if absolute values shift
-3. Visualize as a heatmap: parameter setting vs parameter setting, colored by rank correlation
-4. Also check: do cell-type-level conclusions (which populations are high/low entropy) change across settings?
+**Normalization:** Raw and normalized entropy are perfectly rank-correlated (Spearman r = 1.0) since normalization is a monotonic scaling. Normalization only matters for interpretability of absolute values across different embedding dimensions.
 
-## What a good result looks like
+## Figures
 
-- Rank correlations > 0.90 across reasonable parameter ranges (the relative ordering of cells is stable)
-- Cell-type-level conclusions (e.g., "Ngn3 high EP has lowest entropy") hold across all tested settings
-- If certain parameter ranges produce instability, document the thresholds and add guidance to the README
-
-## What a bad result looks like
-
-- Rank correlations below 0.80 between adjacent parameter values
-- Cell-type ordering flips depending on bin count or neighbor count
-- Would suggest the metric is measuring noise rather than biology
+- `rank_correlation_heatmap.png` — 25x25 Spearman rank correlation matrix across all parameter combinations
+- `celltype_stability.png` — Median entropy per cell type, varying k (left) and bins (right)
+- `raw_vs_normalized.png` — Raw Shannon entropy vs normalized [0,1] entropy

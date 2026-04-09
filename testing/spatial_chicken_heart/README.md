@@ -1,6 +1,6 @@
 # Spatial Transcriptomics: Chicken Heart Development
 
-**Status:** Not yet started
+**Status:** Planned — requires downloading external data from Zenodo (https://doi.org/10.5281/zenodo.6798659)
 
 ## Dataset
 
