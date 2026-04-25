@@ -91,7 +91,7 @@ def preprocess(
     ppi = ppi[largest_clust_genes, largest_clust_genes]
     data = data[:, largest_clust_genes].copy()
     
-    # Intvert data
+    # Invert data
     if data.X.max() < 30:
         print("Data is log-scaled, inverting")
         data.X = np.expm1(data.X)
@@ -138,7 +138,7 @@ def chunk(
     
     Chunks an iterable (obj) into blocks of chunksize, 
     if the length of the last yielded value of this
-    generaotr is smaller than the chunksize, then
+    generator is smaller than the chunksize, then
     it will return a smaller chunk.
     
     Params

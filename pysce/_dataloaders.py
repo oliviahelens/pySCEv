@@ -13,7 +13,7 @@ import numpy as np
 class EntropyDataset(Dataset):
     """
     EntropyDataset
-    fafaf
+
     A Dataloader for anndata objects
     
     Params
