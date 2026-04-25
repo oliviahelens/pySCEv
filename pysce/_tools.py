@@ -107,7 +107,8 @@ def score(
     module = EntropyModule()
 
     # Assign to devices if available
-    module = torch.nn.DataParallel(module, device_ids=[0])
+    if torch.cuda.is_available():
+        module = torch.nn.DataParallel(module, device_ids=[0])
     
     # Make PPI tensor
     ppi_tensor = torch.tensor(ppi.X.toarray()).to(device)
@@ -139,8 +140,11 @@ def score(
     entropy_scores = np.concatenate(entropy_scores)
     
     # Add key
-    data_orig.obs[key_added] = entropy_scores
-    
+    if is_adata:
+        data_orig.obs[key_added] = entropy_scores
+    else:
+        data_orig[key_added] = entropy_scores
+
     # Return if not inplace
     if not inplace:
         return data_orig
