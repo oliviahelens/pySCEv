@@ -183,19 +183,30 @@ def _signed_rank(de: pd.DataFrame) -> pd.DataFrame:
 
 
 def run_gsea(de_tables: dict[str, pd.DataFrame], out_dir: Path) -> dict:
+    """GSEA preranked. Runs the curated pancreas panel unconditionally (no
+    network needed) so the analysis is reproducible offline, plus best-effort
+    against external Hallmark + Reactome libraries via Enrichr -- those will
+    no-op in a sandbox that blocks maayanlab.cloud."""
     import gseapy as gp
+    from validation._common.pancreas_genesets import PANCREAS_PANEL
 
     out_dir.mkdir(exist_ok=True)
     rnk = _signed_rank(de_tables["global"])
     results = {}
-    for label, lib in [
+
+    targets: list[tuple[str, object]] = [
+        ("pancreas_panel", PANCREAS_PANEL),
         ("hallmark", "MSigDB_Hallmark_2020"),
         ("reactome", "Reactome_2022"),
-    ]:
+    ]
+    for label, gene_sets in targets:
         try:
+            # Small panels can have sets <15 genes; relax min_size for the
+            # curated panel so it isn't silently dropped.
+            min_size = 5 if isinstance(gene_sets, dict) else 15
             res = gp.prerank(
-                rnk=rnk, gene_sets=lib, outdir=None, threads=4,
-                min_size=15, max_size=500, permutation_num=1000, seed=0,
+                rnk=rnk, gene_sets=gene_sets, outdir=None, threads=4,
+                min_size=min_size, max_size=500, permutation_num=1000, seed=0,
             )
             df = res.res2d.sort_values("NES", key=abs, ascending=False)
             df.to_csv(out_dir / f"gsea_global_{label}.tsv", sep="\t", index=False)
@@ -214,18 +225,26 @@ def plot_gsea_dotplot(gsea_results: dict, out: Path, top_n: int = 12) -> None:
     rows = []
     for lib, df in gsea_results.items():
         d = df.copy()
+        # gseapy returns these as object dtype; coerce so nlargest works
+        for col in ("NES", "FDR q-val"):
+            d[col] = pd.to_numeric(d[col], errors="coerce")
+        d = d.dropna(subset=["NES"])
         d["library"] = lib
-        # Top up- and down-regulated by NES
-        d_sig = d[d["FDR q-val"] < 0.25]
-        if d_sig.empty:
-            d_sig = d
-        d_sig = pd.concat([
-            d_sig.nlargest(top_n // 2, "NES"),
-            d_sig.nsmallest(top_n // 2, "NES"),
-        ])
-        rows.append(d_sig)
+        # For the curated pancreas panel, show every term (only 9-15 total).
+        # For external libraries, top N by |NES|, biased toward FDR-significant.
+        if lib == "pancreas_panel":
+            d_sel = d.sort_values("NES")
+        else:
+            d_sig = d[d["FDR q-val"] < 0.25]
+            if d_sig.empty:
+                d_sig = d
+            d_sel = pd.concat([
+                d_sig.nlargest(top_n // 2, "NES"),
+                d_sig.nsmallest(top_n // 2, "NES"),
+            ])
+        rows.append(d_sel)
     plot_df = pd.concat(rows)
-    plot_df["term_short"] = plot_df["Term"].str.slice(0, 50)
+    plot_df["term_short"] = plot_df["Term"].astype(str).str.slice(0, 50)
 
     fig, ax = plt.subplots(figsize=(8, max(4, 0.3 * len(plot_df))))
     sns.scatterplot(
@@ -241,10 +260,77 @@ def plot_gsea_dotplot(gsea_results: dict, out: Path, top_n: int = 12) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 6: decoupler-py PROGENy + CollecTRI
+# Step 5b: per-cell panel module scores (continuous readout, no network)
+# ---------------------------------------------------------------------------
+
+def run_panel_module_correlation(adata, out_dir: Path) -> pd.DataFrame:
+    """For each gene set in PANCREAS_PANEL, compute a per-cell module score
+    with scanpy.tl.score_genes and Spearman-correlate with entropy. This is
+    the offline analogue of the decoupler continuous readout: 'how does the
+    activity of pathway X scale with the metric across all cells?'."""
+    import scanpy as sc
+    from scipy.stats import spearmanr
+    from validation._common.pancreas_genesets import PANCREAS_PANEL
+
+    out_dir.mkdir(exist_ok=True)
+    entropy = adata.obs["angular_velocity_entropy"].astype(float).to_numpy()
+    finite = np.isfinite(entropy)
+
+    # scanpy.score_genes wants gene names matching adata.var_names (mouse case
+    # here -- pancreas symbols are mixed-case). Re-case PANCREAS_PANEL to
+    # title-case (Neurog3 etc.), dropping any genes not in the AnnData.
+    var = set(adata.var_names)
+    rows = []
+    for set_name, genes in PANCREAS_PANEL.items():
+        recased = []
+        for g in genes:
+            for cand in (g, g.title(), g.capitalize(), g.lower()):
+                if cand in var:
+                    recased.append(cand)
+                    break
+        if len(recased) < 3:
+            print(f"[modulescore] skip {set_name}: only {len(recased)} genes match")
+            continue
+        sc.tl.score_genes(adata, gene_list=recased, score_name=f"_mod_{set_name}",
+                          use_raw=False, random_state=0)
+        scores = adata.obs[f"_mod_{set_name}"].to_numpy()
+        m = finite & np.isfinite(scores)
+        rho, p = spearmanr(scores[m], entropy[m])
+        rows.append({
+            "geneset": set_name, "n_genes_matched": len(recased),
+            "spearman_rho": rho, "pval": p, "n_cells": m.sum(),
+        })
+        print(f"[modulescore] {set_name}: n={len(recased)}, rho={rho:.3f}")
+
+    df = pd.DataFrame(rows).sort_values("spearman_rho", key=abs, ascending=False)
+    df.to_csv(out_dir / "module_score_corr.tsv", sep="\t", index=False)
+    return df
+
+
+def plot_module_correlation(df: pd.DataFrame, out: Path) -> None:
+    import seaborn as sns
+    if df.empty:
+        return
+    fig, ax = plt.subplots(figsize=(7, max(3, 0.35 * len(df))))
+    colors = ["#2166ac" if r < 0 else "#b2182b" for r in df["spearman_rho"]]
+    sns.barplot(data=df, y="geneset", x="spearman_rho", palette=colors, ax=ax)
+    ax.axvline(0, color="grey", linewidth=0.8)
+    ax.set_xlabel("Spearman rho (module score vs angular_velocity_entropy)")
+    ax.set_title("Per-cell pathway-panel scores vs pySCEv entropy")
+    fig.tight_layout()
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    print(f"[fig] {out}")
+
+
+# ---------------------------------------------------------------------------
+# Step 6: decoupler-py PROGENy + CollecTRI (requires network)
 # ---------------------------------------------------------------------------
 
 def run_decoupler(adata, out_dir: Path) -> dict:
+    """decoupler 2.x: dc.op.progeny/collectri to fetch the net, dc.mt.mlm to
+    score per cell. Scores land in adata.obsm['score_mlm'] (DataFrame of
+    cells x sources). Each call overwrites that key, so snapshot after each."""
     import decoupler as dc
     from scipy.stats import spearmanr
 
@@ -254,16 +340,13 @@ def run_decoupler(adata, out_dir: Path) -> dict:
     finite = np.isfinite(entropy)
 
     for label, fetch in [
-        ("progeny", lambda: dc.get_progeny(organism="mouse", top=500)),
-        ("collectri", lambda: dc.get_collectri(organism="mouse")),
+        ("progeny", lambda: dc.op.progeny(organism="mouse", top=500)),
+        ("collectri", lambda: dc.op.collectri(organism="mouse")),
     ]:
         try:
             net = fetch()
-            dc.run_mlm(
-                mat=adata, net=net, source="source", target="target",
-                weight="weight", verbose=False, use_raw=False,
-            )
-            est = adata.obsm["mlm_estimate"]
+            dc.mt.mlm(data=adata, net=net, raw=False, verbose=False)
+            est = adata.obsm["score_mlm"].copy()
             corrs = []
             for src in est.columns:
                 vals = est[src].to_numpy()
@@ -276,6 +359,8 @@ def run_decoupler(adata, out_dir: Path) -> dict:
             df = df.sort_values("spearman_rho", key=abs, ascending=False)
             df.to_csv(out_dir / f"decoupler_{label}_corr.tsv", sep="\t", index=False)
             out[label] = df
+            # Persist the per-cell scores so downstream UMAP plots can read them
+            adata.obsm[f"{label}_mlm"] = est
             print(f"[decoupler] {label}: {len(df)} sources scored")
         except Exception as exc:
             print(f"[decoupler] {label} FAILED: {exc!r}")
@@ -331,6 +416,9 @@ def main() -> None:
     if not args.skip_gsea:
         gsea_results = run_gsea(de_tables, HERE)
         plot_gsea_dotplot(gsea_results, HERE / "fig_gsea_dotplot.png")
+
+    module_corr = run_panel_module_correlation(adata, HERE)
+    plot_module_correlation(module_corr, HERE / "fig_module_score_bar.png")
 
     if not args.skip_decoupler:
         decoupler_results = run_decoupler(adata, HERE)

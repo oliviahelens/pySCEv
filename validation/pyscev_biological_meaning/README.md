@@ -1,14 +1,24 @@
 # pySCEv Biological Meaning -- Synthesis (in progress)
 
-**Status:** Skeleton. Blocked on (a) running `validation/pancreas_endocrinogenesis_enrichment/run_enrichment.py` locally, and (b) Dubois cardiac-development reprocessing on Minerva (GEO deposit GSE205950 has no spliced/unspliced -- confirmed by inspecting `GSM6235981_cc_card.rds.gz`, only `RNA` and `SCT` assays present).
+**Status:** Pancreas enrichment (Q1) complete -- see `validation/pancreas_endocrinogenesis_enrichment/`. Cross-dataset synthesis blocked on Dubois cardiac-development reprocessing on Minerva (GEO deposit GSE205950 has no spliced/unspliced -- confirmed by inspecting `GSM6235981_cc_card.rds.gz`, only `RNA` and `SCT` assays present).
 
-This document is the cross-dataset synthesis -- it does no compute itself. Once Q1 (pancreas enrichment) and Q2/Q3 (Dubois cell-type stratification + enrichment) are done, fill in the sections below.
+This document is the cross-dataset synthesis -- it does no compute itself. Once Q2/Q3 (Dubois cell-type stratification + enrichment) or a Q5 replacement dataset is done, fill in the convergence/divergence sections below.
 
 ## Operational definition (from primary pass)
 
 From `validation/pancreas_endocrinogenesis/`: low angular velocity entropy = coordinated motion in the cell's neighborhood; high entropy = scattered/incoherent local direction field. Terminal/mature populations score *higher* (Alpha, Delta) because once a cell stops moving along a shared trajectory, the local 2D direction field is dominated by noise. Actively transitioning populations (Ngn3 high EP, Pre-endocrine) score *lower*.
 
 This is the operational read. Everything below either confirms, refines, or contradicts it.
+
+## Pancreas enrichment summary (Q1)
+
+Within-celltype cohort DE + GSEA (full results in `validation/pancreas_endocrinogenesis_enrichment/`):
+
+- **Low pySCEv** is enriched for endocrine-progenitor TFs (Neurog3, Pax4, Foxa3) globally and for proliferation markers (MCM family, H2afz, PCNA, Tuba1b) within cell types like Ductal and Ngn3 high EP. Pdx1 also comes up in the Beta low cohort -- developmental beta TF expressed in cells still on the trajectory.
+- **High pySCEv** is enriched for mature hormone biosynthesis (Pyy, Iapp, Ins, Gcg, Chga) and mature alpha identity (Isl1, Arx, Meis2). Two sets pass FDR<0.05 in the curated-panel GSEA: PANCREATIC_HORMONES and MATURE_ALPHA, both up in high.
+- **Two readouts, different questions.** Cohort DE captures within-celltype contrast (does a Beta cell become Iapp+ as it loses coherent velocity?). Continuous module-score correlation captures cross-celltype scaling (does the progenitor TF score rank cell types in the same order as entropy?). They agree on the progenitor TF axis (rho -0.52) and disagree on proliferation (strong within celltype, ~0 globally).
+
+Bottom line for the synthesis: the pancreas data is consistent with the "low entropy = cell still riding a coordinated trajectory" reading, and the gene-level signal is biologically interpretable. Now we need a second dataset to claim generality.
 
 ## Convergent signals across datasets
 
