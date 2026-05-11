@@ -162,6 +162,8 @@ cython_debug/
 # Downloaded datasets (scVelo cache, etc.)
 data/
 
+# Validation cache (large h5ad/loom files; regenerable)
+validation/**/cache/
 
 # Generated figures (except validation)
 *.png

@@ -1,0 +1,16 @@
+# Validation-only dependencies. Not required to use the pysce package itself;
+# only needed to run the scripts under validation/.
+#
+# Install on top of the main requirements:
+#     pip install -r requirements.txt -r validation/requirements.txt
+
+# Differential expression / pathway enrichment
+gseapy>=1.1,<2.0
+decoupler-py>=1.8,<2.0
+
+# decoupler pulls these as soft deps; pinned here so installs are reproducible
+omnipath>=1.0
+adjusttext>=1.0
+
+# Plotting helpers used by the enrichment scripts
+seaborn>=0.13
