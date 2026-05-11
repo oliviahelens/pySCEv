@@ -170,8 +170,10 @@ See `validation/` for figures:
 
 - **`validation/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
 - **`validation/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
+- **`validation/pancreas_endocrinogenesis_enrichment/`** — Within-celltype DE + GSEA on the pancreas dataset. Asks *what* genes and pathways differ between coherent and incoherent cells of the same identity.
 - **`validation/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Tests whether physically adjacent neighbors give different answers than UMAP neighbors. They do: r = 0.39 between the two.
 - **`validation/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman r = 0.86 across settings; cell-type ordering stable.
+- **`validation/pyscev_biological_meaning/`** — Cross-dataset synthesis README + dataset shortlist for further validation.
 
 ## Status
 
@@ -180,6 +182,7 @@ See `validation/` for figures:
 **Notes so far:**
 - **Synthetic:** Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
 - **Pancreas:** Low entropy marks actively differentiating populations (Ngn3 high EP, Pre-endocrine) — coherent flow, not "committed" fates as the initial hypothesis guessed. Quiescent/terminal populations score higher.
+- **Pancreas gene/pathway enrichment:** Within-celltype DE (top vs bottom 15% by entropy, holding cell type fixed) recovers the predicted developmental-vs-mature pattern in every cell type with enough cells. Beta cells' low cohort expresses Pdx1 (developmental TF); their high cohort expresses Iapp (mature hormone) and the ER translocon. Pre-endocrine low: Pax4 (+2.6 logFC); Pre-endocrine high: Isl1 (-3.66), Pyy (-4.21). Curated-panel GSEA: PANCREATIC_HORMONES (FDR 0.04) and MATURE_ALPHA (FDR 0.04) up in high; ENDOCRINE_PROGENITOR_TFS up in low. Reframes the metric as reading **coordination of trajectory** specifically, not stemness — cells riding a shared developmental wave have correlated velocity directions because they're running the same gene programs in lockstep.
 - **Not redundant with existing metrics:** anti-correlates with scVelo confidence (r ~ -0.48, ~77% unique variance), nearly uncorrelated with expression entropy (r ~ 0.02).
 - **Correlated with simpler mean angular deviation, r ~ 0.80 on pancreas.** Entropy captures distribution shape; mean angle only captures the first moment. The ~20% unique variance comes from multimodal neighborhoods (genuine bifurcations).
 - **Spatial chicken heart (day 14 Visium, 1967 spots):** spatial neighbors and UMAP neighbors give meaningfully different answers (r = 0.39), so physical adjacency captures structure transcriptional adjacency doesn't. In spatial context, entropy and mean deviation diverge more (r = 0.52 vs 0.80) — more cells fall in the multimodal regime where entropy's distribution-shape sensitivity matters. Overlaying Mantri's anatomical regions: lowest entropy in the **left ventricular wall** (trabecular + endocardium, compact myocardium + septum) — the coordinated cardiomyocyte differentiation zones. Highest entropy in **valves and atria** — known developmental mixing zones where multiple divergent trajectories share physical space. Consistent with the pancreas result: low entropy = coordinated differentiation wave, high entropy = multiple divergent trajectories in proximity.

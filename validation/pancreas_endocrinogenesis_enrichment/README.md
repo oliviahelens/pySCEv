@@ -109,7 +109,7 @@ The takeaway: cohort-based and continuous methods are complementary. Cohort read
 
 ## Conclusion
 
-Within-celltype, low pySCEv = transitioning / developmental programs (progenitor TFs, proliferation, ER-active chromatin); high pySCEv = terminal / secretory programs (hormone biosynthesis, lineage-commitment TFs of the mature state, secretion machinery). Across cell types, the same pattern holds for the broad endocrine-progenitor TF axis but washes out for proliferation, which is a within-celltype cycle uncorrelated with the global entropy ordering.
+Within-celltype, low pySCEv = transitioning / developmental programs (progenitor TFs, proliferation, actively transcribed chromatin); high pySCEv = terminal / secretory programs (hormone biosynthesis, lineage-commitment TFs of the mature state, secretion machinery). Across cell types, the same pattern holds for the broad endocrine-progenitor TF axis but washes out for proliferation, which is a within-celltype cycle uncorrelated with the global entropy ordering.
 
 The metric is reading something biologically interpretable, and consistent across two different statistical framings of the same data. The operational definition from the primary pass ("low entropy = coordinated motion") is now backed by gene-level evidence of *what* that coordination is composed of: cells riding the same developmental wave have correlated velocity directions and correlated progenitor-program expression; cells at the terminus of differentiation have neither.
 
@@ -121,6 +121,7 @@ The metric is reading something biologically interpretable, and consistent acros
 - **Continuous correlation effect sizes are modest.** Even the strongest signal (ENDOCRINE_PROGENITOR_TFS, rho -0.52) explains ~27% of the variance in entropy across cells. The rest is noise plus signal not captured by these 15 gene sets.
 - **Cohort cutoff is 15% within cell type.** Easy to change via `--quantile`. The DE statistics are sensitive to cohort size; results above are at q=0.15.
 - **One dataset.** Cross-dataset comparison waits on Dubois cardiac (blocked on velocyto reprocessing -- GEO deposit ships no spliced/unspliced) or a swap-in like dentate gyrus. See `validation/pyscev_biological_meaning/README.md`.
+- **scVelo deterministic mode.** `validation/_common/score_pipeline.py` uses `scv.tl.velocity(mode="deterministic")` to dodge a numpy 2.x bug in scvelo 0.3.4's stochastic regression path (same workaround as the spatial chicken heart pipeline). The primary pancreas README documents stochastic-mode results from an earlier environment; cell-type ordering is parameterization-stable (`validation/parameterization/`) so the cohort assignment is preserved, but absolute entropy values differ slightly between runs.
 
 ## What this does and does not show
 

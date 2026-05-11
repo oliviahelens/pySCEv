@@ -45,10 +45,15 @@ Lowest entropy: **Ngn3 high EP, Pre-endocrine** — the actively transitioning p
 
 - **One dataset, one parameter set.** Stability across k and bins is covered in `validation/parameterization/`.
 - **UMAP-projected velocity.** Direction vectors are 2D projections; any pathology of the UMAP projection flows into the angles. Higher-dim PCA basis is a reasonable next thing to try.
-- **Default scVelo stochastic mode.** No numpy 2.x issue on this run (unlike the chicken heart pipeline).
+- **scVelo stochastic mode** for the figures above (no numpy 2.x issue on the run that produced them). The committed `velocity_vs_entropy.py` and the shared `validation/_common/score_pipeline.py` switched to deterministic mode for scvelo 0.3.4 + numpy 2.x compatibility — same workaround as the chicken heart pipeline. Cell-type ordering is preserved (see `validation/parameterization/`) but absolute entropy values shift slightly between modes.
 - The correlations above are from a single run; not bootstrapped.
 
 ## What this does and does not show
 
 - Shows: on a well-studied differentiation dataset, the metric produces a cell-type ordering that is biologically readable, and it is not redundant with expression entropy or scVelo confidence.
 - Does not show: that this ordering is useful for any specific biological question (TIC vs normal stem cell, disease stratification, etc.), or that it generalizes beyond this dataset. See `spatial_chicken_heart/` for one follow-up on different tissue.
+
+## See also
+
+- **`pancreas_endocrinogenesis_enrichment/`** — within-celltype DE + GSEA on the same dataset. Asks *what* gene programs differ between coherent (low-pySCEv) and incoherent (high-pySCEv) cells holding cell-type identity fixed. Confirms the operational read above with gene-level evidence.
+- **`pyscev_biological_meaning/`** — cross-dataset synthesis README and shortlist of follow-up datasets for testing generality beyond pancreas.
