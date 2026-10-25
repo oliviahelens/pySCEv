@@ -13,15 +13,17 @@ This is speculative — see [Status](#status) and `validation/` for validation r
 ## Installation
 
 ```bash
-pip install -e .
+pip install -e .              # core
+pip install -e ".[velocity]"  # + scVelo, for ensure_velocity / auto-projection
 ```
 
 ### Requirements
 
-- `scanpy >= 1.8.2`
-- `torch >= 2.0.0`
-- `scvelo >= 0.2.4` (for velocity estimation; optional if you precompute velocity)
-- `scikit-learn >= 1.0`
+- `scanpy >= 1.8.2`, `torch >= 2.0.0`, `networkx` (expression entropy, `pysce.score`)
+- `scikit-learn >= 1.0`, `anndata`, `numpy`, `scipy` (velocity entropy)
+- `scvelo >= 0.2.4` (optional; only needed if pySCEv has to estimate or project velocity for you)
+
+`pysce.score` imports torch lazily, so the velocity tools work without torch installed.
 
 ## Usage
 
@@ -52,8 +54,8 @@ pysce.score_angular_velocity_entropy(adata, basis='umap')
 ```
 
 **Output:**
-- `adata.obs['angular_velocity_entropy']` — per-cell score in [0, 1] (normalized), or NaN for cells with zero velocity
-- `adata.uns['angular_velocity_entropy_params']` — run metadata including parameters, cell counts, and the normalization denominator
+- `adata.obs['angular_velocity_entropy']` — per-cell score in [0, 1] (normalized), or NaN for cells slower than `min_speed`
+- `adata.uns['angular_velocity_entropy_params']` — run metadata: parameters, neighbors actually used, cell counts, and `random_baseline` (the score isotropic noise would get at this dimensionality)
 
 **Interpretation:**
 - **Low entropy** (~0): neighbors' velocity vectors are coherent, pointing in similar directions (active transition / committed trajectory)
@@ -66,20 +68,27 @@ pysce.score_angular_velocity_entropy(adata, basis='umap')
 | `basis` | `'umap'` | Embedding for neighbor lookup (`'umap'` for 2D, `'pca'` for higher-dim) |
 | `n_neighbors` | `30` | Number of nearest neighbors per cell |
 | `n_bins` | `8` | Angular histogram bins |
-| `normalize` | `True` | Normalize to [0, 1] using dimension-aware max entropy |
+| `normalize` | `True` | Divide by `log2(n_bins)` so scores lie in [0, 1] |
+| `min_speed` | `1e-10` | Cells (and neighbors) slower than this are treated as directionless |
 
-### Dimension-Aware Normalization
+### Normalization and the random baseline
 
-When `normalize=True`, raw entropy is divided by the theoretical maximum for that dimensionality. For 2D this is `log2(n_bins)` (uniform on circle). For higher dimensions, it accounts for the concentration of measure — random unit vectors in high-dim space have pairwise angles concentrated near pi/2, so the raw max entropy is lower. This makes scores directly comparable across 2D and high-dim bases.
+When `normalize=True`, raw entropy is divided by `log2(n_bins)`, the largest value any neighborhood can reach in any dimension, so scores always lie in [0, 1].
 
-Reference values (n_bins=8):
+What isotropic *noise* scores depends on dimensionality. Random unit vectors in high dimensions have pairwise angles concentrated near pi/2 (concentration of measure), so they fill fewer bins. That expected noise level is stored as `random_baseline` in the run metadata:
 
-| Dimensions | Max entropy (bits) | Context |
+| Dimensions | Random baseline (bits, n_bins=8) | Normalized |
 |---|---|---|
-| 2 (UMAP) | 3.00 | Uniform on circle |
-| 10 | 1.89 | Moderate concentration |
-| 30 (PCA) | 1.21 | Strong concentration near pi/2 |
-| 50 | 1.05 | Very tight concentration |
+| 2 (UMAP) | 3.00 | 1.00 |
+| 10 | 1.89 | 0.63 |
+| 30 (PCA) | 1.21 | 0.40 |
+| 50 | 1.05 | 0.35 |
+
+Compare absolute scores only between runs on the same basis. (Earlier versions divided by this baseline instead; that let structured high-dimensional fields score well above 1 and was removed.)
+
+### Velocity speed
+
+Slow cells have poorly determined velocity directions, so their angles are dominated by estimation noise and push entropy up. On pancreas, entropy correlates with log speed (see `validation/pancreas_endocrinogenesis/`). Setting `min_speed` to a low quantile of `np.linalg.norm(adata.obsm['velocity_umap'], axis=1)` removes slow cells from every neighborhood; check that conclusions hold with it.
 
 ## How It Works
 
@@ -125,44 +134,39 @@ The score is divided by `log(lambda_1)` where `lambda_1` is the largest eigenval
 The new velocity entropy metric scores each cell by measuring how disordered the RNA velocity directions are in its local neighborhood.
 
 **Step 1: Get velocity vectors and find neighbors.**
-For each cell `i`, take its RNA velocity projected into embedding space (e.g., UMAP) as a 2D vector `v_i`. Find the `k` nearest neighbors in embedding space (default `k=30`).
+For each cell `i`, take its RNA velocity projected into embedding space (e.g., UMAP or PCA) as a vector `v_i`. Find the `k` nearest neighbors in embedding space (default `k=30`), excluding the cell itself.
 
-**Step 2: Compute angles.**
-
-*2D embeddings (UMAP):* Convert each neighbor's velocity to an absolute angle:
-
-```
-theta_j = atan2(v_j_y, v_j_x),   theta in [0, 2pi)
-```
-
-*Higher-dimensional embeddings (PCA):* Compute all pairwise angles among the `k` neighbor velocity vectors using cosine similarity:
+**Step 2: Compute pairwise angles.**
+Compute every pairwise angle among the `k` neighbor velocity vectors:
 
 ```
 theta_jl = arccos( (v_j . v_l) / (|v_j| * |v_l|) ),   theta in [0, pi]
 ```
 
-This gives `k*(k-1)/2` pairwise angles. The pairwise approach is necessary because in high dimensions there is no natural "absolute angle" reference.
+This gives `k*(k-1)/2` angles. They depend only on the vectors' relative orientation, so the score is the same however the embedding is rotated, and the same configuration scores identically in 2D or embedded in more dimensions.
+
+(Versions before 0.2 binned each neighbor's *absolute* angle `atan2(v_y, v_x)` in 2D. Fixed bin edges split any flow pointing along a bin boundary — 0°, 45°, 90°, … — so an identical coherent flow could score anywhere from 0 to 0.33 depending on its heading in the UMAP.)
 
 **Step 3: Bin and compute Shannon entropy.**
-Histogram the angles into `B` equal-width bins (default `B=8`). Compute the Shannon entropy of the resulting distribution:
+Histogram the angles into `B` equal-width bins on [0, pi] (default `B=8`). Compute the Shannon entropy of the resulting distribution:
 
 ```
 p_b = count_b / sum(counts)
 H = -sum_b p_b * log2(p_b)
 ```
 
-If all neighbors point the same way, one bin gets all the counts and `H = 0`. If directions are uniformly spread, all bins are equal and `H = log2(B)`.
+If all neighbors point the same way, every angle is ~0 and `H = 0`. Two opposite streams put roughly half the pairs at 0 and half at pi, so `H ≈ 1` bit. Directions spread uniformly around a circle give uniform pairwise angles and `H = log2(B)`.
 
-**Step 4: Dimension-aware normalization.**
-In 2D, the maximum entropy is simply `log2(B)` (uniform on a circle). In higher dimensions, random unit vectors don't produce uniform pairwise angles — due to *concentration of measure*, angles cluster near `pi/2` as dimensionality grows. The theoretical pairwise angle distribution is:
+**Step 4: Normalize.**
+Divide by `log2(B)`. For reference, the expected pairwise-angle density for isotropic random vectors in `d` dimensions is
 
 ```
 f(theta) proportional to sin^(d-2)(theta),   theta in [0, pi]
 ```
 
-We integrate this density over each bin to get the expected bin probabilities for random vectors, then compute the Shannon entropy of that distribution. This is the maximum entropy for that dimensionality. Dividing by it normalizes scores to [0, 1] regardless of whether you use UMAP (2D) or PCA (30D).
+which is uniform in 2D (baseline = 1.0) and concentrates near pi/2 as `d` grows (baseline ≈ 0.40 in 30D). This is reported as `random_baseline`, not used as the denominator.
 
-**Cells with zero velocity** (magnitude < 1e-10) get NaN — entropy of direction is undefined when there is no direction.
+**Cells slower than `min_speed`** get NaN and are left out of their neighbors' angle sets — direction is undefined when there is no motion.
 
 ## Examples
 

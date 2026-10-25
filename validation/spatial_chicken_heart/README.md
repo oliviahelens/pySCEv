@@ -2,6 +2,8 @@
 
 **Status:** First pass complete on day-14 SIRV-imputed Visium section (1967 spots), including Mantri region + cell-type overlays. Follow-ups noted below.
 
+> **⚠ Numbers below predate pySCEv 0.2 and need re-running.** They were produced with the old 2D scorer, which binned absolute velocity angles and so depended on how the embedding was rotated (a coherent flow along a bin edge scored ~0.33 instead of ~0). The scorer, the mean-angular-deviation comparison and the Moran's I weights also used one neighbor fewer than requested (each cell's nearest real neighbor was dropped). All three are fixed in `pysce` and `run_analysis.py`. The SIRV data (Zenodo) was not reachable from the environment that made the fix, so the figures, `permutation_summary.txt` and `permutation_null.npz` here are still from the old code. Re-run with `--permute 100` before citing any value in this file. On pancreas, where the re-run was possible, the qualitative cell-type ranking survived but the confound controls changed how much of it can be attributed to biology — see `../pancreas_endocrinogenesis/`.
+
 ## Dataset
 
 - Chicken Heart Development (Mantri et al. 2021). Paper: https://www.nature.com/articles/s41467-021-21892-z · GEO: GSE149457
