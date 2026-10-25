@@ -126,7 +126,7 @@ def calc_max_entropy(
     
     # Calculate maximum entropy as log of right real eigenvalue
     eig_val, _ = la.eigs(ppi.X, k=1, which='LM')    
-    return np.log(float(eig_val.real))
+    return float(np.log(eig_val[0].real))
 
 
 def chunk(

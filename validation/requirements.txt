@@ -14,5 +14,6 @@ decoupler>=2.1,<3.0
 # Plotting helpers used by the enrichment scripts
 seaborn>=0.13
 
-# Plotting helpers used by the enrichment scripts
-seaborn>=0.13
+# Velocity estimation used by every validation pipeline
+scvelo>=0.2.4
+matplotlib

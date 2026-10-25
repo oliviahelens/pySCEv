@@ -167,9 +167,9 @@ def mean_angular_deviation(adata, coords_key: str, n_neighbors: int = 30):
     V_unit = np.zeros_like(V)
     V_unit[valid] = V[valid] / norms[valid, np.newaxis]
 
-    nn = NearestNeighbors(n_neighbors=min(n_neighbors + 1, len(coords)))
+    nn = NearestNeighbors(n_neighbors=min(n_neighbors, len(coords) - 1))
     nn.fit(coords)
-    idx = nn.kneighbors(return_distance=False)[:, 1:]
+    idx = nn.kneighbors(return_distance=False)  # self already excluded
 
     out = np.full(len(coords), np.nan)
     for i in range(len(coords)):
@@ -455,9 +455,9 @@ def build_spatial_knn_weights(coords, k):
     n = len(coords)
     k = min(k, n - 1)
 
-    nn = NearestNeighbors(n_neighbors=k + 1)
+    nn = NearestNeighbors(n_neighbors=k)
     nn.fit(coords)
-    idx = nn.kneighbors(return_distance=False)[:, 1:]  # drop self
+    idx = nn.kneighbors(return_distance=False)  # self already excluded
 
     rows = np.repeat(np.arange(n), k)
     cols = idx.reshape(-1)

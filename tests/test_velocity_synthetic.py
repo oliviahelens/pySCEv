@@ -199,6 +199,7 @@ def test_metadata_stored():
     params = adata.uns['test_ent_params']
     assert params['basis'] == 'umap'
     assert params['n_neighbors'] == 15
+    assert params['n_neighbors_used'] == 15
     assert params['n_bins'] == 12
     assert params['normalize'] is False
     assert params['n_cells_scored'] + params['n_cells_nan'] == n
@@ -263,12 +264,173 @@ def test_high_dim_pairwise():
     assert np.median(aligned_valid) < 0.05, (
         f"Aligned high-dim entropy too high: {np.median(aligned_valid):.4f}"
     )
-    # With dimension-aware normalization, random vectors should now
-    # score near 1.0 even in high dimensions.
-    assert np.median(random_valid) > 0.85, (
-        f"Random high-dim entropy too low: {np.median(random_valid):.4f}"
+    # Random directions in 30D concentrate near pi/2, so they should land
+    # near the analytic random baseline rather than at the [0, 1] ceiling.
+    baseline = adata_b.uns['angular_velocity_entropy_params']['random_baseline']
+    assert abs(np.median(random_valid) - baseline) < 0.05, (
+        f"Random high-dim entropy {np.median(random_valid):.4f} "
+        f"far from baseline {baseline:.4f}"
     )
     assert np.median(aligned_valid) < np.median(random_valid)
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Score does not depend on how the embedding is rotated
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize('heading_deg', [0, 10, 22.5, 45, 180])
+def test_rotation_invariance(heading_deg):
+    """
+    A coherent flow with small angular noise must score the same whatever
+    direction it points. Fixed absolute-angle bins used to split flows
+    that sat on a bin edge (0, 45, 90 ... degrees) and score them ~0.33.
+    """
+    rng = np.random.default_rng(1)
+    n = 400
+    positions = rng.normal(0, 0.1, (n, 2))
+    theta = np.deg2rad(heading_deg) + rng.normal(0, np.deg2rad(5), n)
+    velocities = np.column_stack([np.cos(theta), np.sin(theta)])
+
+    adata = _make_adata(n, positions, velocities)
+    score_angular_velocity_entropy(adata, n_neighbors=30, n_bins=8)
+    median = np.median(adata.obs['angular_velocity_entropy'])
+    assert median < 0.15, f"heading {heading_deg}: median={median:.3f}"
+
+
+def test_rotation_gives_identical_scores():
+    """Rotating every velocity vector by the same angle changes nothing."""
+    rng = np.random.default_rng(2)
+    n = 300
+    positions = rng.normal(0, 1, (n, 2))
+    velocities = rng.normal(0, 1, (n, 2)) + [2, 0]
+    a = np.deg2rad(37)
+    R = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+
+    ad1 = _make_adata(n, positions, velocities)
+    ad2 = _make_adata(n, positions, velocities @ R.T)
+    score_angular_velocity_entropy(ad1)
+    score_angular_velocity_entropy(ad2)
+    np.testing.assert_allclose(
+        ad1.obs['angular_velocity_entropy'], ad2.obs['angular_velocity_entropy'],
+        atol=1e-12,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Normalized scores never exceed 1, in any dimension
+# ---------------------------------------------------------------------------
+def test_high_dim_bounded():
+    """
+    Velocities spread uniformly within a 2D plane of a 30D space give
+    pairwise angles uniform on [0, pi] -- more spread than isotropic noise.
+    These used to score ~2.5 when normalized by the random baseline.
+    """
+    rng = np.random.default_rng(3)
+    n, ndim = 400, 30
+    theta = rng.uniform(0, 2 * np.pi, n)
+    V = np.zeros((n, ndim))
+    V[:, 0], V[:, 1] = np.cos(theta), np.sin(theta)
+
+    adata = AnnData(csr_matrix((n, 10)))
+    adata.obsm['X_pca'] = rng.normal(0, 0.1, (n, ndim))
+    adata.obsm['velocity_pca'] = V
+    score_angular_velocity_entropy(adata, basis='pca')
+    scores = adata.obs['angular_velocity_entropy'].values
+    assert np.nanmax(scores) <= 1.0 + 1e-12
+    assert np.median(scores) > 0.85
+
+
+# ---------------------------------------------------------------------------
+# Test 11: Same configuration scores the same in 2D and embedded in 30D
+# ---------------------------------------------------------------------------
+def test_bifurcation_consistent_across_dims():
+    """Pairwise angles are dimension-free, so a 2D bifurcation embedded in
+    30D (zero padding) must give identical scores."""
+    rng = np.random.default_rng(4)
+    n = 300
+    sign = np.where(rng.random(n) < 0.5, 1.0, -1.0)
+    V2 = np.column_stack([sign, np.zeros(n)]) + rng.normal(0, 0.05, (n, 2))
+    pos2 = rng.normal(0, 0.1, (n, 2))
+
+    ad2 = _make_adata(n, pos2, V2)
+    ad30 = AnnData(csr_matrix((n, 10)))
+    ad30.obsm['X_pca'] = np.pad(pos2, ((0, 0), (0, 28)))
+    ad30.obsm['velocity_pca'] = np.pad(V2, ((0, 0), (0, 28)))
+    score_angular_velocity_entropy(ad2)
+    score_angular_velocity_entropy(ad30, basis='pca')
+    np.testing.assert_allclose(
+        ad2.obs['angular_velocity_entropy'], ad30.obs['angular_velocity_entropy'],
+        atol=1e-12,
+    )
+    # Opposite streams: ~half the pairs at 0, half at pi -> ~1 bit of 3
+    assert 0.25 < np.median(ad2.obs['angular_velocity_entropy']) < 0.4
+
+
+# ---------------------------------------------------------------------------
+# Test 12: min_speed drops slow cells and slow neighbors
+# ---------------------------------------------------------------------------
+def test_min_speed_excludes_slow_noise():
+    """
+    Coherent fast cells mixed with slow cells pointing randomly. With the
+    default threshold the slow cells' noise inflates entropy; raising
+    min_speed above their speed removes them from every neighborhood.
+    """
+    rng = np.random.default_rng(5)
+    n = 400
+    positions = rng.normal(0, 0.1, (n, 2))
+    fast = np.arange(n) < n // 2
+    theta = np.where(fast, 0.3, rng.uniform(0, 2 * np.pi, n))
+    speed = np.where(fast, 1.0, 1e-3)
+    velocities = speed[:, None] * np.column_stack([np.cos(theta), np.sin(theta)])
+
+    adata = _make_adata(n, positions, velocities)
+    score_angular_velocity_entropy(adata, key_added='all')
+    score_angular_velocity_entropy(adata, min_speed=1e-2, key_added='fast')
+
+    assert np.median(adata.obs['all'][fast]) > 0.5
+    assert np.all(adata.obs['fast'][fast] < 1e-12)
+    assert np.all(np.isnan(adata.obs['fast'][~fast]))
+    assert adata.uns['fast_params']['min_speed'] == 1e-2
+
+
+# ---------------------------------------------------------------------------
+# Test 13: Vectorized implementation matches a direct per-cell reference
+# ---------------------------------------------------------------------------
+def test_matches_reference_loop():
+    """Cross-check chunked vectorized scoring against a plain loop."""
+    from pysce._velocity import _pairwise_angle_entropy
+    rng = np.random.default_rng(6)
+    n, d, k, B = 120, 5, 12, 8
+    V = rng.normal(size=(n, d))
+    V[::7] = 0  # some invalid cells
+    norms = np.linalg.norm(V, axis=1)
+    valid = norms > 1e-10
+    U = np.zeros_like(V)
+    U[valid] = V[valid] / norms[valid, None]
+    idx = np.array([rng.choice(np.delete(np.arange(n), i), k, replace=False)
+                    for i in range(n)])
+
+    got = _pairwise_angle_entropy(U, valid, idx, B, chunk_size=17)
+
+    expected = np.full(n, np.nan)
+    for i in range(n):
+        nb = idx[i][valid[idx[i]]]
+        if len(nb) < 2:
+            continue
+        c = np.clip(U[nb] @ U[nb].T, -1, 1)[np.triu_indices(len(nb), 1)]
+        counts, _ = np.histogram(np.arccos(c), bins=np.linspace(0, np.pi, B + 1))
+        p = counts[counts > 0] / counts.sum()
+        expected[i] = -np.sum(p * np.log2(p))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_import_without_torch():
+    """The velocity tools must not require torch."""
+    import subprocess, sys
+    code = (
+        "import sys; sys.modules['torch'] = None; "
+        "import pysce; pysce.score_angular_velocity_entropy"
+    )
+    subprocess.run([sys.executable, '-c', code], check=True)
 
 
 if __name__ == '__main__':

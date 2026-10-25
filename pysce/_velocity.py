@@ -8,32 +8,31 @@ from anndata import AnnData
 import numpy as np
 
 
-def _max_entropy_for_dim(ndim, n_bins):
+def _random_baseline_entropy(ndim, n_bins):
     """\
-    Compute the maximum expected Shannon entropy (in bits) for a given
-    dimensionality and bin count, used to normalize scores so that
-    0 = perfectly aligned and 1 = as random as possible regardless
-    of dimensionality.
+    Expected Shannon entropy (in bits) of the binned pairwise-angle
+    distribution for isotropic random unit vectors in ``ndim`` dimensions,
+    in the limit of many neighbors.
 
-    For 2D, random directions are uniform on [0, 2pi), so max entropy
-    is simply log2(n_bins).
+    Pairwise angles between random unit vectors follow
+    f(theta) ∝ sin^(d-2)(theta) on [0, pi]. For d = 2 this is uniform, so
+    the baseline equals the true maximum log2(n_bins). For larger d the
+    density concentrates near pi/2 (concentration of measure), so random
+    vectors fill fewer bins and the baseline drops well below the maximum.
 
-    For higher dimensions, pairwise angles between random unit vectors
-    follow the distribution f(theta) ∝ sin^(d-2)(theta) on [0, pi].
-    Due to concentration of measure, this distribution becomes
-    increasingly peaked around pi/2 as dimensionality grows, reducing
-    the raw entropy of even perfectly random vectors. We integrate
-    this density over each bin to get the expected bin probabilities,
-    then compute Shannon entropy from those.
+    This is a *reference value*, not an upper bound: structured
+    configurations (e.g. velocities spread within a low-dimensional
+    subspace) can exceed it. It is reported in the run metadata so scores
+    can be read against what pure noise would give at that dimensionality.
 
     Reference values (n_bins=8):
 
-        ndim    max entropy (bits)    interpretation
-        ----    ------------------    --------------
-           2              3.00        uniform on circle
-          10              1.89        angles spread over ~half the bins
-          30              1.21        concentrated near pi/2
-          50              1.05        tightly concentrated near pi/2
+        ndim    baseline (bits)    as fraction of log2(8)
+        ----    ---------------    ----------------------
+           2              3.00        1.00
+          10              1.89        0.63
+          30              1.21        0.40
+          50              1.05        0.35
 
     Params
     -------
@@ -44,31 +43,60 @@ def _max_entropy_for_dim(ndim, n_bins):
 
     Returns
     -------
-    max_entropy : float
-        Expected Shannon entropy (bits) of the binned angle
-        distribution for uniformly random unit vectors.
+    baseline : float
+        Expected Shannon entropy (bits) for random directions.
     """
     if ndim == 2:
-        return np.log2(n_bins)
+        return float(np.log2(n_bins))
 
     from scipy.integrate import quad
 
-    d = ndim
     bin_edges = np.linspace(0, np.pi, n_bins + 1)
-
-    # Unnormalized density: sin^(d-2)(theta)
-    def kernel(theta):
-        return np.sin(theta) ** (d - 2)
-
-    # Integrate over each bin
     bin_masses = np.array([
-        quad(kernel, bin_edges[j], bin_edges[j + 1])[0]
+        quad(lambda t: np.sin(t) ** (ndim - 2), bin_edges[j], bin_edges[j + 1])[0]
         for j in range(n_bins)
     ])
-    # Normalize to probabilities
     p = bin_masses / bin_masses.sum()
     p = p[p > 0]
-    return -np.sum(p * np.log2(p))
+    return float(-np.sum(p * np.log2(p)))
+
+
+def _pairwise_angle_entropy(V_unit, valid, indices, n_bins, chunk_size=2048):
+    """\
+    Shannon entropy (bits) of the binned pairwise angles among each cell's
+    neighbor velocity directions.
+
+    Pairwise angles depend only on the vectors' relative orientation, so
+    the result is invariant to rotations of the embedding. Neighbors whose
+    velocity is flagged invalid are dropped from every pair they take part
+    in. Cells with fewer than two valid neighbors get NaN.
+    """
+    n_cells, k = indices.shape
+    triu_j, triu_l = np.triu_indices(k, k=1)
+    out = np.full(n_cells, np.nan)
+
+    for start in range(0, n_cells, chunk_size):
+        idx = indices[start:start + chunk_size]
+        nbr = V_unit[idx]                                   # (c, k, d)
+        nbr_valid = valid[idx]                              # (c, k)
+
+        cos = np.einsum('ckd,cld->ckl', nbr, nbr)[:, triu_j, triu_l]
+        theta = np.arccos(np.clip(cos, -1.0, 1.0))          # (c, P)
+        bins = np.minimum((theta / np.pi * n_bins).astype(np.intp), n_bins - 1)
+        pair_ok = nbr_valid[:, triu_j] & nbr_valid[:, triu_l]
+
+        counts = np.zeros((len(idx), n_bins))
+        rows = np.broadcast_to(np.arange(len(idx))[:, None], bins.shape)
+        np.add.at(counts, (rows[pair_ok], bins[pair_ok]), 1)
+
+        total = counts.sum(1, keepdims=True)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            p = counts / total
+            h = -np.sum(np.where(p > 0, p * np.log2(p), 0.0), axis=1)
+        h[total[:, 0] == 0] = np.nan
+        out[start:start + len(idx)] = h
+
+    return out
 
 
 def ensure_velocity(
@@ -153,29 +181,30 @@ def score_angular_velocity_entropy(
     n_neighbors: int = 30,
     n_bins: int = 8,
     normalize: bool = True,
+    min_speed: float = 1e-10,
     key_added: str = 'angular_velocity_entropy',
     inplace: bool = True,
 ) -> Optional[AnnData]:
     """\
-    Local Angular Velocity Entropy (Metric 1)
+    Local Angular Velocity Entropy
 
-    For each cell, examines the RNA velocity vectors of its k nearest
-    neighbors in embedding space and computes Shannon entropy of how
-    spread out those velocity directions are among the neighbors.
+    For each cell, takes the RNA velocity vectors of its k nearest
+    neighbors in embedding space, computes every pairwise angle between
+    them, and returns the Shannon entropy of the binned angles.
 
-    High entropy = neighbors moving in scattered directions
-    (disordered / multipotent neighborhood).
-    Low entropy = neighbors moving coherently in the same direction
-    (committed trajectory).
+    Low entropy = neighbors moving coherently in the same direction.
+    High entropy = neighbors moving in scattered directions.
 
-    For 2D embeddings, each neighbor's velocity direction is converted
-    to an absolute angle via atan2 and binned in [0, 2pi). For higher-
-    dimensional embeddings, all pairwise angles among neighbor velocity
-    vectors are computed via cosine similarity and binned in [0, pi].
+    Pairwise angles are used for every dimensionality (2D included), so
+    the score does not depend on how the embedding happens to be rotated.
+    Angles lie in [0, pi] and are split into ``n_bins`` equal-width bins.
 
-    Cells with near-zero velocity (magnitude < 1e-10) are assigned
-    NaN. Summary statistics (number of scored cells, NaN count,
-    parameters used) are stored in adata.uns[key_added + '_params'].
+    Cells whose own velocity is slower than ``min_speed`` are assigned NaN,
+    and such neighbors are excluded from the pairwise angles. Slow cells
+    have poorly determined directions, so their angles are dominated by
+    noise; raise ``min_speed`` (e.g. to a low quantile of the speed
+    distribution) to keep that noise out of the score. Run metadata is
+    stored in adata.uns[key_added + '_params'].
 
     Params
     -------
@@ -191,13 +220,15 @@ def score_angular_velocity_entropy(
     n_bins
         Number of angular bins for the histogram.
     normalize
-        If True, normalize entropy to [0, 1] by dividing by the
-        expected maximum entropy for the given dimensionality.
-        For 2D this is log2(n_bins) (uniform on circle). For
-        higher dimensions, the max is derived analytically from
-        the pairwise angle distribution f(θ) ∝ sin^(d-2)(θ),
-        accounting for concentration of measure. This makes
-        scores directly comparable across 2D and high-dim bases.
+        If True, divide by log2(n_bins), the largest entropy any
+        neighborhood can have, so scores lie in [0, 1]. The expected
+        score for isotropic random directions depends on dimensionality
+        (1.0 in 2D, about 0.4 in 30D for 8 bins) and is stored as
+        'random_baseline' in the run metadata. Compare absolute scores
+        only between runs on the same basis.
+    min_speed
+        Velocity vectors with L2 norm below this value are treated as
+        having no direction.
     key_added
         Key in adata.obs where scores are stored.
     inplace
@@ -208,7 +239,6 @@ def score_angular_velocity_entropy(
     AnnData or None if inplace.
     """
     from sklearn.neighbors import NearestNeighbors
-    from tqdm.auto import tqdm
 
     velocity_key = f'velocity_{basis}'
     embedding_key = f'X_{basis}'
@@ -244,85 +274,52 @@ def score_angular_velocity_entropy(
             scv.tl.velocity_graph(adata)
         scv.tl.velocity_embedding(adata, basis=basis)
 
-    V = np.asarray(adata.obsm[velocity_key])
+    V = np.asarray(adata.obsm[velocity_key], dtype=np.float64)
     X_emb = np.asarray(adata.obsm[embedding_key])
     n_cells = adata.n_obs
     ndim = V.shape[1]
 
-    # Identify cells with near-zero velocity (undefined direction)
+    if n_cells < 3:
+        raise ValueError("Need at least 3 cells to score neighborhoods.")
+
+    # Cells with near-zero (or non-finite) velocity have no usable direction
     vel_norms = np.linalg.norm(V, axis=1)
-    zero_vel_mask = vel_norms < 1e-10
+    valid = np.isfinite(vel_norms) & (vel_norms >= min_speed)
+    V_unit = np.zeros_like(V)
+    V_unit[valid] = V[valid] / vel_norms[valid, np.newaxis]
 
     # Build k-NN index in embedding space
     k = min(n_neighbors, n_cells - 1)
-    nn = NearestNeighbors(n_neighbors=k + 1, algorithm='auto')
+    nn = NearestNeighbors(n_neighbors=k, algorithm='auto')
     nn.fit(X_emb)
-    indices = nn.kneighbors(return_distance=False)[:, 1:]  # exclude self
+    # With no query passed, sklearn excludes each cell from its own list
+    indices = nn.kneighbors(return_distance=False)
 
-    entropy_scores = np.full(n_cells, np.nan)
+    entropy_scores = _pairwise_angle_entropy(V_unit, valid, indices, n_bins)
+    entropy_scores[~valid] = np.nan
 
-    if ndim == 2:
-        # 2D: absolute angle of each velocity vector, binned in [0, 2pi).
-        # Entropy measures how spread out neighbor directions are.
-        angles = np.arctan2(V[:, 1], V[:, 0]) % (2 * np.pi)
-        bin_edges = np.linspace(0, 2 * np.pi, n_bins + 1)
-
-        for i in tqdm(range(n_cells), desc="Scoring angular velocity entropy", unit="cell"):
-            if zero_vel_mask[i]:
-                continue
-            nbr_idx = indices[i][~zero_vel_mask[indices[i]]]
-            if len(nbr_idx) == 0:
-                continue
-            counts, _ = np.histogram(angles[nbr_idx], bins=bin_edges)
-            p = counts[counts > 0] / counts.sum()
-            entropy_scores[i] = -np.sum(p * np.log2(p))
-    else:
-        # Higher-dim: pairwise angles among neighbor velocity vectors
-        # via cosine similarity, binned in [0, pi]. Measures the same
-        # thing as the 2D path — directional spread — but generalized
-        # to arbitrary dimensions.
-        V_unit = np.zeros_like(V)
-        valid = ~zero_vel_mask
-        V_unit[valid] = V[valid] / vel_norms[valid, np.newaxis]
-        bin_edges = np.linspace(0, np.pi, n_bins + 1)
-
-        for i in tqdm(range(n_cells), desc="Scoring angular velocity entropy", unit="cell"):
-            if zero_vel_mask[i]:
-                continue
-            nbr_idx = indices[i][~zero_vel_mask[indices[i]]]
-            if len(nbr_idx) < 2:
-                continue
-            nbr_vecs = V_unit[nbr_idx]
-            # Pairwise cosine similarities (upper triangle)
-            cos_matrix = nbr_vecs @ nbr_vecs.T
-            triu_idx = np.triu_indices(len(nbr_idx), k=1)
-            cos_pairs = np.clip(cos_matrix[triu_idx], -1.0, 1.0)
-            theta = np.arccos(cos_pairs)
-            counts, _ = np.histogram(theta, bins=bin_edges)
-            p = counts[counts > 0] / counts.sum()
-            entropy_scores[i] = -np.sum(p * np.log2(p))
-
-    # Normalize to [0, 1] if requested
+    max_entropy = float(np.log2(n_bins))
+    baseline = _random_baseline_entropy(ndim, n_bins)
     if normalize:
-        max_entropy = _max_entropy_for_dim(ndim, n_bins)
-        if max_entropy > 0:
-            entropy_scores = entropy_scores / max_entropy
+        entropy_scores = entropy_scores / max_entropy
 
     adata.obs[key_added] = entropy_scores
 
     # Store run metadata so users can inspect parameters and coverage
-    n_scored = int(np.isfinite(entropy_scores).sum())
-    n_nan = int(np.isnan(entropy_scores).sum())
-    max_ent = _max_entropy_for_dim(ndim, n_bins)
     adata.uns[key_added + '_params'] = {
         'basis': basis,
         'embedding_ndim': ndim,
         'n_neighbors': n_neighbors,
+        'n_neighbors_used': k,
         'n_bins': n_bins,
+        'angles': 'pairwise',
         'normalize': normalize,
-        'max_entropy_bits': float(max_ent),
-        'n_cells_scored': n_scored,
-        'n_cells_nan': n_nan,
+        'min_speed': float(min_speed),
+        'max_entropy_bits': max_entropy,
+        'random_baseline_bits': baseline,
+        'random_baseline': baseline / max_entropy if normalize else baseline,
+        'n_cells_scored': int(np.isfinite(entropy_scores).sum()),
+        'n_cells_nan': int(np.isnan(entropy_scores).sum()),
     }
 
     if not inplace:
