@@ -1,0 +1,216 @@
+{
+  "spearman_offdiag": {
+    "min": 0.8179022550796348,
+    "median": 0.9493500920741353,
+    "mean": 0.93128775869591,
+    "max": 0.9997969168642407
+  },
+  "celltype_median_rank_rho_vs_k30_b8": {
+    "min": 0.730552019767088,
+    "median": 0.9047619047619048
+  },
+  "lowest_two_by_setting": {
+    "k=5,b=8": [
+      "Pre-endocrine",
+      "Ngn3 high EP"
+    ],
+    "k=5,b=12": [
+      "Pre-endocrine",
+      "Ngn3 high EP"
+    ],
+    "k=5,b=18": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=5,b=24": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=5,b=36": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=10,b=8": [
+      "Pre-endocrine",
+      "Ngn3 high EP"
+    ],
+    "k=10,b=12": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=10,b=18": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=10,b=24": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=10,b=36": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=15,b=8": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=15,b=12": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=15,b=18": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=15,b=24": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=15,b=36": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=20,b=8": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=20,b=12": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=20,b=18": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=20,b=24": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=20,b=36": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=30,b=8": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=30,b=12": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=30,b=18": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=30,b=24": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ],
+    "k=30,b=36": [
+      "Ngn3 high EP",
+      "Pre-endocrine"
+    ]
+  },
+  "highest_two_by_setting": {
+    "k=5,b=8": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=5,b=12": [
+      "Alpha",
+      "Ductal"
+    ],
+    "k=5,b=18": [
+      "Delta",
+      "Ductal"
+    ],
+    "k=5,b=24": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=5,b=36": [
+      "Ductal",
+      "Delta"
+    ],
+    "k=10,b=8": [
+      "Ductal",
+      "Epsilon"
+    ],
+    "k=10,b=12": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=10,b=18": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=10,b=24": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=10,b=36": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=15,b=8": [
+      "Ductal",
+      "Epsilon"
+    ],
+    "k=15,b=12": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=15,b=18": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=15,b=24": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=15,b=36": [
+      "Epsilon",
+      "Ductal"
+    ],
+    "k=20,b=8": [
+      "Ductal",
+      "Epsilon"
+    ],
+    "k=20,b=12": [
+      "Ductal",
+      "Epsilon"
+    ],
+    "k=20,b=18": [
+      "Ductal",
+      "Epsilon"
+    ],
+    "k=20,b=24": [
+      "Ductal",
+      "Epsilon"
+    ],
+    "k=20,b=36": [
+      "Ductal",
+      "Epsilon"
+    ],
+    "k=30,b=8": [
+      "Epsilon",
+      "Delta"
+    ],
+    "k=30,b=12": [
+      "Epsilon",
+      "Delta"
+    ],
+    "k=30,b=18": [
+      "Epsilon",
+      "Delta"
+    ],
+    "k=30,b=24": [
+      "Epsilon",
+      "Delta"
+    ],
+    "k=30,b=36": [
+      "Epsilon",
+      "Delta"
+    ]
+  }
+}

@@ -148,7 +148,7 @@ def fig_umap_panels(adata, out):
     scv.pl.scatter(adata, color=KEY, ax=axes[1], show=False,
                    color_map="viridis", title="angular velocity entropy")
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -160,7 +160,7 @@ def fig_streamlines(adata, out):
         show=False, title="velocity streamlines over angular velocity entropy",
     )
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -169,7 +169,7 @@ def fig_box(adata, y, out, title):
     box_by_type(ax, adata, y, title)
     ax.set_ylabel("angular velocity entropy")
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -184,7 +184,7 @@ def fig_scatter(adata, x, y, xlabel, ylabel, title, out, pal):
     ax.set_title(f"{title}\nPearson r = {r:.2f}, Spearman rho = {rho:.2f}")
     ax.legend(fontsize=7, frameon=False, markerscale=2)
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -196,7 +196,7 @@ def fig_expression_umaps(adata, out):
     scv.pl.scatter(adata, color=KEY, ax=axes[1], show=False,
                    color_map="viridis", title="angular velocity entropy")
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -226,7 +226,7 @@ def fig_speed_control(adata, speed, resid, filtered, out, pal):
     box_by_type(axes[2], adata, resid, "entropy residual after regressing on log speed")
     axes[2].axhline(0, color="grey", lw=0.8)
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -240,7 +240,7 @@ def fig_permutation(null_kw, obs_kw, null_I, obs_I, out):
         ax.set_title(f"{lab}\nnull {null.mean():.2f} ± {null.std():.2f}, z = {z:.1f}")
         ax.legend(frameon=False, fontsize=8)
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 

@@ -1,6 +1,6 @@
 # Pancreas pySCEv: Gene + Pathway Enrichment
 
-**Status:** Complete. Within-celltype DE + GSEA results below. Decoupler PROGENy/CollecTRI step requires network access to omnipathdb; runs locally but no-ops in this sandbox -- see Caveats.
+**Status:** Complete; re-run on the pySCEv 0.2 scorer. Within-celltype DE + GSEA results below. Decoupler PROGENy/CollecTRI step requires network access to omnipathdb; runs locally but no-ops in this sandbox -- see Caveats.
 
 ## Question
 
@@ -22,7 +22,7 @@ python validation/pancreas_endocrinogenesis_enrichment/run_enrichment.py
 
 Pipeline:
 
-1. `scvelo.datasets.pancreas()` -> standard scVelo preprocessing -> `pysce.score_angular_velocity_entropy(basis='umap', n_neighbors=30, n_bins=8)`. Cached as `cache/pancreas.scored.h5ad`.
+1. `scvelo.datasets.pancreas()` -> standard scVelo preprocessing -> `pysce.score_angular_velocity_entropy(basis='umap', n_neighbors=30, n_bins=8)`. Cached as `cache/pancreas.scored.h5ad` (also written by `../pancreas_endocrinogenesis/run_analysis.py`).
 2. Cohort assignment: bottom/top 15% within each cell type. Cell types with <60 valid cells are dropped (Delta, Epsilon).
 3. Wilcoxon DE (`scanpy.tl.rank_genes_groups`), low vs high, run globally and per cell type passing the >=30-per-cohort threshold.
 4. GSEA preranked (`gseapy.prerank`) on `metric = sign(logFC) * -log10(pval)` against (a) a curated 15-set pancreas panel in `validation/_common/pancreas_genesets.py` (offline, runs unconditionally), (b) Enrichr Hallmark + Reactome (online; falls through silently in offline environments).
@@ -35,48 +35,48 @@ The primary pass concluded "low entropy = coordinated motion in the neighborhood
 
 ## Results
 
+Re-run on the pySCEv 0.2 scorer (pairwise angles, rotation-invariant). The previous version of this file was produced with the old absolute-angle scorer; where conclusions changed it is called out below.
+
 ### Cohort sizes
 
-q=0.15 within celltype: 815 low / 576 high (out of 3,696). Per-celltype DE ran on Ductal (147/139), Ngn3 low EP (43/40), Ngn3 high EP (294/112), Pre-endocrine (124/90), Beta (94/89), Alpha (76/73). Delta and Epsilon skipped (<30 per cohort).
+q=0.15 within celltype: 904 low / 559 high (out of 3,696). Per-celltype DE ran on Ductal (138/138), Ngn3 low EP (40/40), Ngn3 high EP (418/97), Pre-endocrine (109/89), Beta (93/89), Alpha (73/73). Delta and Epsilon skipped (<30 per cohort).
+
+Ngn3 high EP's low cohort is oversized because 65% of those cells score exactly 0 (every neighbor pair within one 22.5° bin), so the 15% cutoff falls inside a tie.
 
 ### Global DE (`de_global.tsv`)
 
 | Direction | Top genes (by adj p) |
 |---|---|
-| Up in low | **Neurog3** (logFC +1.65), Aldh1b1, Foxa3, Cd24a, Mpzl1, Btg2, Qsox1 |
-| Up in high | **Isl1** (logFC -1.46), Cd200, Meis2, Slc38a5, **Pyy** (-1.47), Fam183b, Id2, **Arx** (-1.37) |
+| Up in low | **Neurog3** (logFC +2.21), Gadd45a, Btbd17, Btg2, Marcksl1, Smarcd2, Foxa3 |
+| Up in high | Akr1c19, **Isl1** (-1.68), Id2, Atp1b1, Rap1b, Peg3, **Meis2** |
 
-Low cohort is enriched for the endocrine-progenitor master TF (Neurog3) and the early-commitment marker Cd24a. High cohort is enriched for the alpha-cell master TF (Arx), its co-regulator Isl1, and the hormone Pyy. Direct match to the hypothesis.
+Same axis as before: the low cohort carries the endocrine-progenitor TF Neurog3 and its targets; the high cohort carries the mature-endocrine TFs Isl1 and Meis2. The global cohorts pool the per-celltype cohorts, so they still partly reflect cell-type composition (Ngn3 high EP dominates the low cohort).
 
 ### Per-celltype DE highlights (`de_<celltype>.tsv`)
 
-The pattern recurs *within* every cell type with enough cells:
+- **Ductal** (124 genes at FDR < 0.05) -- low: Tuba1b, Spc24, H2afz, Hmgb2, **Birc5**, **Pcna** (replication / mitosis). High: Malat1, Anxa5, Rbms3, Tpm1, Errfi1. *Unchanged from the old scorer.*
+- **Ngn3 high EP** (166) -- low: Clu, Sparc, Ttr, Spp1, Acot1, Mgst1. High: Cck, Tubb3, Aplp1, Igfbpl1. *Unchanged.*
+- **Pre-endocrine** (130) -- low: **Nkx6-1**, Chgb, **Pax4**, Chga, Hpcal1. High: **Isl1**, **Pyy**, **Arx**, Fam183b, Cdkn1a, Scgn. *Unchanged in direction: low = beta-lineage specifiers, high = alpha-lineage / maturing.*
+- **Beta** (14) -- low: **Iapp**, **Ins2**, Mapt, Nnat, Hspa5. High: Glud1, **Arx**, Fev. ***Reversed.*** The old scorer gave Pdx1 in low and Iapp/secretory machinery in high. Now the mature beta hormones are in the *low* cohort, and the high cohort carries Arx/Fev, which mark alpha-lineage or immature endocrine cells near the Beta/Alpha boundary.
+- **Alpha** (25) -- low: **Gcg**, Pcsk2, **Iapp**, Ttr, Resp18. High: Hspa8, **Cdkn1a**, Tm4sf4, Usp18. ***Reversed for hormones.*** Glucagon processing (Gcg, Pcsk2) is now up in *low*-entropy Alpha cells.
+- **Ngn3 low EP** (3) -- low: Neurog3, Cd24a. High: Lurap1l. Too few hits to read.
 
-- **Ngn3 high EP** -- low: Clu, Sparc, Spp1, Acot1, Ttr (secretory-progenitor signature). High: Cck (hormone), Tubb3, Krt7, Tuba1a, Aplp1 (cytoskeletal / maturation).
-- **Pre-endocrine** -- low: **Pax4** (logFC +2.60; the classic endocrine specifier), Krt8, Gspt1, **Chgb** (chromogranin). High: **Isl1** (-3.66), **Pyy** (-4.21), Fam183b, Rbp4, Lrpprc.
-- **Beta** -- low: H3f3b (histone variant, active chromatin), Calm2, **Pdx1** (beta-cell master TF). High: **Iapp** (-1.75; mature beta hormone), Ssr2, Ssr4 (ER translocon, secretion machinery), Ppp1r1a, Creld2.
-- **Alpha** -- low: Smarca1, **Abcc8** (KATP channel), Scg5, Snap25, Ncam1. High: Hspa8 (chaperone), Cdkn1a (p21, cell-cycle exit), Hsp90aa1, Emb, Rbp4.
-- **Ductal** -- low: Spc24, **Tuba1b**, 2810417H13Rik, **H2afz**, Slc25a5 (all mitosis/replication markers). High: Anxa5, Tpm1, Errfi1, Malat1, Zfos1.
-- **Ngn3 low EP** -- low: Btg2, Foxa3, **Neurog3**, Cdkn1a, Cd24a. High: Hmga2 (proliferation TF), Lurap1l, Id2, Atp1b1, Nudt19.
-
-Within Ductal, low-entropy cells are actively cycling (MCM family analogues, replication histones); within Beta, low-entropy cells express developmental Pdx1 while high-entropy cells express mature Iapp/secretory machinery. This is exactly the predicted intra-celltype progenitor-vs-mature contrast.
+Within Ductal, Ngn3 high EP and Pre-endocrine the old within-celltype story holds: low-entropy cells are cycling or carry early specification TFs. Within the terminal types (Alpha, Beta) it does **not**: low-entropy cells there express *more* mature hormone, not less. The earlier claim that "high entropy = terminal/secretory within every cell type" depended on the old binning.
 
 ### GSEA preranked on curated panel (`gsea_global_pancreas_panel.tsv`)
 
-Top by |NES| (full table in TSV):
+| Term | NES | FDR q-val |
+|---|---:|---:|
+| PANCREATIC_HORMONES | **-1.57** | **0.035** |
+| MATURE_ALPHA | -1.46 | 0.088 |
+| ENDOCRINE_PROGENITOR_TFS | +1.39 | 0.34 |
+| DUCTAL_MARKERS | -1.03 | 0.74 |
+| EMT_MIGRATION | +0.96 | 1.00 |
+| UNFOLDED_PROTEIN_RESPONSE | -0.89 | 0.80 |
+| PROLIFERATION_CELL_CYCLE | +0.80 | 0.97 |
+| MATURE_BETA | -0.75 | 0.82 |
 
-| Term | NES | FDR q-val | Leading edge |
-|---|---:|---:|---|
-| PANCREATIC_HORMONES | **-1.57** | **0.041** | PYY, SCG3, IAPP, PPY, CHGA, INS1, GHRL, SCG5, INS2, NPY |
-| MATURE_ALPHA | **-1.53** | **0.037** | MEIS2, ARX, IRX2 |
-| ENDOCRINE_PROGENITOR_TFS | **+1.42** | 0.219 | NEUROG3, FOXA3, PAX4 |
-| MATURE_BETA | -1.33 | 0.204 | IAPP, PCSK2, INS1, SLC2A2, G6PC2, PCSK1, INS2, GIPR |
-| PROLIFERATION_CELL_CYCLE | +1.26 | 0.402 | TUBB5, MCM3, PCNA, MCM6, STMN1, MCM4, H2AFZ, RRM1, HMGB2, TYMS |
-| EMT_MIGRATION | +1.22 | 0.322 | VIM, MMP14, FN1 |
-| UNFOLDED_PROTEIN_RESPONSE | -0.99 | 0.639 | HSP90B1, XBP1, HSPA5, DDIT3 |
-| DUCTAL_MARKERS | +0.99 | 0.516 | CLU, SPP1, KRT8 |
-
-Two sets pass FDR < 0.05: **PANCREATIC_HORMONES** and **MATURE_ALPHA**, both enriched in the high-entropy cohort. **ENDOCRINE_PROGENITOR_TFS** is enriched in the low-entropy cohort at FDR 0.22 (marginal, but the leading edge -- NEUROG3, FOXA3, PAX4 -- is exactly the expected genes). Proliferation is positive (low > high) but doesn't reach significance at the global level because the within-celltype proliferation cycles cancel across cell types in the global preranked metric.
+Only **PANCREATIC_HORMONES** passes FDR < 0.05 (up in the global high cohort); MATURE_ALPHA drops to 0.09. Given the per-celltype reversal above, this global hormone enrichment reflects which cell types fill the pooled high cohort, not a within-identity maturation effect.
 
 Plot: `fig_gsea_dotplot.png`.
 
@@ -86,45 +86,43 @@ Spearman rho of per-cell module score vs entropy:
 
 | Set | rho | n_genes |
 |---|---:|---:|
-| **ENDOCRINE_PROGENITOR_TFS** | **-0.52** | 12 |
-| APOPTOSIS_INTRINSIC | -0.24 | 4 |
-| HYPOXIA_GLYCOLYSIS | +0.22 | 4 |
-| UNFOLDED_PROTEIN_RESPONSE | +0.20 | 12 |
-| MATURE_ALPHA | +0.17 | 7 |
-| DUCTAL_MARKERS | +0.12 | 12 |
-| PANCREATIC_HORMONES | +0.09 | 13 |
-| PROLIFERATION_CELL_CYCLE | +0.05 | 24 |
-| MATURE_BETA | +0.03 | 10 |
+| **ENDOCRINE_PROGENITOR_TFS** | **-0.56** | 12 |
+| HYPOXIA_GLYCOLYSIS | +0.27 | 4 |
+| APOPTOSIS_INTRINSIC | -0.23 | 4 |
+| MATURE_ALPHA | +0.20 | 7 |
+| UNFOLDED_PROTEIN_RESPONSE | +0.19 | 12 |
+| DUCTAL_MARKERS | +0.17 | 12 |
+| PROLIFERATION_CELL_CYCLE | +0.06 | 24 |
+| PANCREATIC_HORMONES | +0.05 | 13 |
+| MATURE_BETA | -0.03 | 10 |
 
 Plot: `fig_module_score_bar.png`.
 
-The continuous and cohort readouts answer different questions and don't always agree:
-
-- **ENDOCRINE_PROGENITOR_TFS** is strong in both -- the progenitor TF score is highest where entropy is lowest, and that pattern holds both across cell types and within. The signal is locally and globally aligned.
-- **PROLIFERATION_CELL_CYCLE** is strong in the cohort DE (within Ductal, within Ngn3 high EP) but weak globally (rho 0.05). Proliferation cycles run within each cell type independently of the overall entropy ordering; the global continuous correlation averages those out.
-- **PANCREATIC_HORMONES** is significant in GSEA (FDR 0.04) but weak in continuous (rho 0.09). The high-cohort enrichment for hormone genes is a *within-celltype* effect (mature Alpha cells in their high-entropy quantile express more Gcg/Pyy than mature Alpha cells in their low-entropy quantile), which the cohort method amplifies and the global continuous correlation dilutes.
-- **UPR and HYPOXIA_GLYCOLYSIS** show modest positive rho (~0.2) in the continuous readout but don't appear in the cohort GSEA. Likely tracks a cell-type-level pattern (mature secretory cells run more ER stress and have higher entropy), not a within-cell-type contrast.
-
-The takeaway: cohort-based and continuous methods are complementary. Cohort reads within-celltype contrast (what changes as a cell of identity X becomes coherent vs incoherent); continuous reads cross-celltype scaling (which cell types in general have which programs). Both confirm the hypothesis, but on different axes.
+- **ENDOCRINE_PROGENITOR_TFS** remains the strongest and most consistent signal (rho -0.56; was -0.52), and it agrees with the global and per-celltype DE.
+- **PROLIFERATION_CELL_CYCLE** is strong within Ductal but ~0 globally, as before.
+- **PANCREATIC_HORMONES / MATURE_BETA** are ~0 globally, consistent with the reversed within-celltype result: there is no simple "more hormone = higher entropy" relationship.
 
 ## Conclusion
 
-Within-celltype, low pySCEv = transitioning / developmental programs (progenitor TFs, proliferation, ER-active chromatin); high pySCEv = terminal / secretory programs (hormone biosynthesis, lineage-commitment TFs of the mature state, secretion machinery). Across cell types, the same pattern holds for the broad endocrine-progenitor TF axis but washes out for proliferation, which is a within-celltype cycle uncorrelated with the global entropy ordering.
+One finding survives the scorer fix cleanly: **low pySCEv tracks the endocrine-progenitor TF program** (Neurog3, Pax4, Nkx6-1, Foxa3), across cell types (rho -0.56) and within the progenitor cell types. Low entropy also marks cycling cells within Ductal.
 
-The metric is reading something biologically interpretable, and consistent across two different statistical framings of the same data. The operational definition from the primary pass ("low entropy = coordinated motion") is now backed by gene-level evidence of *what* that coordination is composed of: cells riding the same developmental wave have correlated velocity directions and correlated progenitor-program expression; cells at the terminus of differentiation have neither.
+The second half of the old conclusion -- "high pySCEv = terminal / secretory program within each identity" -- does **not** survive. In Alpha and Beta, mature hormone genes are now higher in the *low*-entropy cohort. The safer reading is that low entropy marks cells on a coherent, well-resolved flow (the progenitor wave, or the core of a terminal cluster with a consistent residual velocity), and high entropy marks boundary and slow regions where the projected direction field is poorly determined. Velocity speed explains part of that (see `../pancreas_endocrinogenesis/speed_control.png`).
 
 ## Caveats
 
 - **Mouse symbols uppercased to match human MSigDB.** Pancreas is mm10. The GSEA preranked uses uppercased symbols; this is the standard hack for using human pathway databases on mouse data but is not a true ortholog mapping. For a higher-fidelity pass, swap in MSigDB mouse collections (`gseapy.Msigdb` with `mh.all` and `m2.cp.reactome`) when running locally.
 - **External pathway libraries blocked in this sandbox.** MSigDB Hallmark via Enrichr (maayanlab.cloud), Reactome via Enrichr, PROGENy and CollecTRI via omnipathdb.org -- all return HTTP 403 here. The curated panel in `validation/_common/pancreas_genesets.py` is what runs unconditionally. The `gp.prerank` calls for Hallmark/Reactome and the `dc.mt.mlm` calls for PROGENy/CollecTRI are still in the script under try/except and will produce additional output files when run with internet access. They are not strictly required to answer the central question; the curated panel covers the expected biology.
 - **The curated panel is biased toward the hypothesis.** It includes both confirmatory sets (proliferation, hormones, progenitor TFs) and contrastive ones (UPR, hypoxia, apoptosis, EMT), but it's not a blind scan. The fact that the confirmatory sets win is informative, but a full MSigDB Hallmark scan with corrected p-values would be more rigorous. Re-running locally with internet would close that gap.
-- **Continuous correlation effect sizes are modest.** Even the strongest signal (ENDOCRINE_PROGENITOR_TFS, rho -0.52) explains ~27% of the variance in entropy across cells. The rest is noise plus signal not captured by these 15 gene sets.
+- **Continuous correlation effect sizes are modest.** Even the strongest signal (ENDOCRINE_PROGENITOR_TFS, rho -0.56) explains ~31% of the variance in entropy across cells. The rest is noise plus signal not captured by these 15 gene sets.
+- **Ties at zero.** 16% of all cells (65% of Ngn3 high EP) score exactly 0, so quantile cutoffs inside that cell type are tie-dominated.
+- **Speed is not controlled in the DE.** Cohorts are cut on raw entropy, which correlates with log speed (rho -0.49). A speed-matched cohort design is the obvious next refinement.
 - **Cohort cutoff is 15% within cell type.** Easy to change via `--quantile`. The DE statistics are sensitive to cohort size; results above are at q=0.15.
 - **One dataset.** Cross-dataset comparison waits on Dubois cardiac (blocked on velocyto reprocessing -- GEO deposit ships no spliced/unspliced) or a swap-in like dentate gyrus. See `validation/pyscev_biological_meaning/README.md`.
 
 ## What this does and does not show
 
-- **Shows:** the gene programs that systematically differ between coherent (low-pySCEv) and incoherent (high-pySCEv) cells in the pancreas dataset, at the within-celltype level via DE+GSEA and at the cross-celltype level via continuous module scores. The two readouts agree on direction for the progenitor-TF axis and diverge for proliferation (within-celltype only) and hormone-secretion (within-celltype amplified).
+- **Shows:** low pySCEv is robustly associated with the endocrine-progenitor TF program, globally and within progenitor cell types, and with proliferation within Ductal cells.
+- **Does not support:** a general "high entropy = mature/secretory" reading; within Alpha and Beta the hormone genes go the other way.
 - **Does not show:** a causal claim about what drives the entropy score. Pathway enrichment on quantile cohorts is correlational. Also does not show generalization beyond pancreas -- the synthesis doc tracks the cross-dataset analysis status.
 
 ## Files

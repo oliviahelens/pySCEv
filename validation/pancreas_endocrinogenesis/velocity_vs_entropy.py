@@ -98,7 +98,9 @@ def main() -> None:
     args = p.parse_args()
 
     print("[load] scv.datasets.pancreas()")
-    adata = scv.datasets.pancreas()
+    adata = scv.datasets.pancreas(
+        file_path=str(Path(__file__).parent / "cache" / "endocrinogenesis_day15.h5ad")
+    )
     print(f"[load] {adata.n_obs} cells x {adata.n_vars} genes")
 
     print("[prep] scVelo preprocessing + velocity")

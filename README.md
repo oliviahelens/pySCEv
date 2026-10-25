@@ -172,23 +172,31 @@ which is uniform in 2D (baseline = 1.0) and concentrates near pi/2 as `d` grows 
 
 See `validation/` for figures:
 
-- **`validation/synthetic_validation/`** — Synthetic data where the ground truth is known. Confirms the math works: aligned velocities score ~0, bifurcation ~0.33, random ~1.0.
-- **`validation/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019). Shows the metric captures meaningful biological structure on real data.
-- **`validation/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Tests whether physically adjacent neighbors give different answers than UMAP neighbors. They do: r = 0.39 between the two.
-- **`validation/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman r = 0.86 across settings; cell-type ordering stable.
+- **`validation/synthetic_validation/`** — Synthetic data where the ground truth is known. Aligned velocities score ~0, bifurcation ~0.33, random ~1.0, and scores do not depend on embedding rotation.
+- **`validation/pancreas_endocrinogenesis/`** — scVelo pancreas endocrinogenesis dataset (Bastidas-Ponce et al. 2019), with velocity-speed and permutation controls.
+- **`validation/pancreas_endocrinogenesis_enrichment/`** — gene programs of low- vs high-entropy cells on pancreas.
+- **`validation/spatial_chicken_heart/`** — SIRV-imputed Visium (Mantri et al. 2021, day 14). Spatial vs UMAP neighbors. *Numbers predate the 0.2 scorer and need re-running.*
+- **`validation/parameterization/`** — k neighbors × bin count sweep on pancreas. Median Spearman rho = 0.95 across settings; the two lowest cell types are stable, the top of the ranking is not.
 
 ## Status
 
 **Angular Velocity Entropy** is speculative and under active validation. The core question is whether velocity-based entropy provides biological insight that expression entropy and existing tools (e.g., scVelo's velocity confidence) do not.
 
-**Notes so far:**
-- **Synthetic:** Clean separation between aligned (0), bifurcation (0.33), and random (1.0) velocity fields.
-- **Pancreas:** Low entropy marks actively differentiating populations (Ngn3 high EP, Pre-endocrine) — coherent flow. Quiescent/terminal populations score higher.
-- **Not redundant with existing metrics:** anti-correlates with scVelo confidence (r ~ -0.48, ~77% unique variance), nearly uncorrelated with expression entropy (r ~ 0.02).
-- **Correlated with simpler mean angular deviation, r ~ 0.80 on pancreas.** Entropy captures distribution shape; mean angle only captures the first moment. The ~20% unique variance comes from multimodal neighborhoods (genuine bifurcations).
-- **Spatial chicken heart (day 14 Visium, 1967 spots):** spatial neighbors and UMAP neighbors give meaningfully different answers (r = 0.39), so physical adjacency captures structure transcriptional adjacency doesn't. In spatial context, entropy and mean deviation diverge more (r = 0.52 vs 0.80) — more cells fall in the multimodal regime where entropy's distribution-shape sensitivity matters. Overlaying Mantri's anatomical regions: lowest entropy in the **left ventricular wall** (trabecular + endocardium, compact myocardium + septum) — the coordinated cardiomyocyte differentiation zones. Highest entropy in **valves and atria** — known developmental mixing zones where multiple divergent trajectories share physical space. Consistent with the pancreas result: low entropy = coordinated differentiation wave, high entropy = multiple divergent trajectories in proximity.
-- **Permutation control (N=100) on the chicken heart:** shuffling velocity vectors across spots and recomputing confirms the region ranking is real (Kruskal-Wallis H 329 vs null 66 ± 46, +5.7σ) but reframes the "big smooth tissue patches" claim — about two-thirds of the raw spatial autocorrelation (Moran's I null ≈ 0.47 out of observed 0.74) comes from the k-NN scoring kernel's own smoothing, regardless of biology. The biological signal is the anatomical alignment, not the patchiness itself. See `validation/spatial_chicken_heart/` for details.
-- **Parameterization is stable:** median Spearman r = 0.86 across a 5×5 sweep of k and bin count on pancreas; cell-type ordering preserved.
+**Notes so far** (pySCEv 0.2; see "Changes in 0.2" below for what moved):
+- **Synthetic:** aligned (0), bifurcation (0.33), random (1.0); identical scores under rotation and across 2D / zero-padded 30D.
+- **Pancreas:** the endocrine-progenitor wave (Ngn3 high EP, Pre-endocrine) scores far lower than every other population. This survives removing the slowest 25% of cells, regressing out velocity speed, and a shuffled-velocity permutation null (Kruskal-Wallis H 1811 vs null 129 ± 65, z = 26).
+- **Velocity speed is a major confound.** Entropy correlates with log speed (Spearman -0.49). Once speed is accounted for, Ductal, Ngn3 low EP and the terminal endocrine types are roughly indistinguishable; "terminal cells score higher" is mostly "slow cells score higher". Use `min_speed` and check.
+- **Relation to existing metrics:** anti-correlates with scVelo confidence (r = -0.47), weakly with expression entropy (r = 0.15). It is close to the simpler mean angular deviation in rank terms (Spearman 0.94, Pearson 0.78), so the added value of the entropy form is small on this dataset.
+- **Gene programs:** low entropy tracks the endocrine-progenitor TF program (Neurog3, Pax4, Nkx6-1; module rho -0.56). The earlier "high entropy = mature/secretory within each cell type" result did not reproduce: within Alpha and Beta, hormone genes are higher in the *low*-entropy cells.
+- **Kernel smoothing:** about half of the spatial autocorrelation on the pancreas UMAP (Moran's I null 0.45 of observed 0.93) comes from overlapping k-NN neighborhoods alone, as the chicken heart permutation also found. Smooth patches are not evidence by themselves.
+- **Parameterization is stable:** median Spearman rho = 0.95 across a 5×5 sweep of k and bin count; Ngn3 high EP and Pre-endocrine are the two lowest in all 25 settings.
+- **Spatial chicken heart:** the old results (spatial vs UMAP neighbors r = 0.39; low entropy in the left ventricular wall, high in valves and atria; permutation z = 5.7 for region ranking) were computed with the pre-0.2 scorer and are pending a re-run.
+
+**Changes in 0.2:**
+- 2D scores used fixed absolute-angle bins, so a coherent flow pointing along a bin edge scored ~0.33 instead of ~0 (heading-dependent). Scoring now uses pairwise angles in every dimension, which is rotation-invariant.
+- High-dimensional scores were divided by the random-vector baseline and could exceed 1 (~2.5 for a field spread in a plane). Scores are now divided by log2(n_bins) and always lie in [0, 1]; the baseline is reported as metadata.
+- Each cell's nearest neighbor was dropped by an off-by-one in the k-NN lookup.
+- `pysce.score` crashed on NumPy 2 before scoring anything.
 
 **Open questions:**
 - Does angular velocity entropy distinguish TICs from normal stem cells in practice?

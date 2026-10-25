@@ -1,0 +1,83 @@
+{
+  "n_cells": 3696,
+  "n_scored": 3696,
+  "celltype_median": {
+    "Ductal": 0.7675878753338379,
+    "Ngn3 low EP": 0.6570648552464674,
+    "Ngn3 high EP": 0.0,
+    "Pre-endocrine": 0.1163173663948438,
+    "Beta": 0.35740352231665923,
+    "Alpha": 0.604267144358844,
+    "Delta": 0.8689404758466583,
+    "Epsilon": 0.786805278090083
+  },
+  "vs_velocity_confidence": {
+    "pearson": -0.46526380757915736,
+    "spearman": -0.5124900032570877
+  },
+  "vs_mean_angular_deviation": {
+    "pearson": 0.7845244311764223,
+    "spearman": 0.9361884628794691
+  },
+  "vs_log_speed": {
+    "pearson": -0.5177074370909172,
+    "spearman": -0.4932119816558751
+  },
+  "vs_expression_entropy": {
+    "pearson": 0.15055773432257208,
+    "spearman": 0.1775640087398818
+  },
+  "speed_control": {
+    "min_speed_q25": 0.012185981260009063,
+    "celltype_median_min_speed_q25": {
+      "Ductal": 0.3458641580873332,
+      "Ngn3 low EP": 0.3137636760759017,
+      "Ngn3 high EP": 0.0,
+      "Pre-endocrine": 0.06840950111144846,
+      "Beta": 0.197867219441209,
+      "Alpha": 0.46388845921986094,
+      "Delta": 0.40473536269057925,
+      "Epsilon": 0.4267787004886105
+    },
+    "celltype_median_speed_residual": {
+      "Ductal": 0.12533038724744133,
+      "Ngn3 low EP": 0.1295762068357485,
+      "Ngn3 high EP": -0.34660812465198454,
+      "Pre-endocrine": -0.23196348953132645,
+      "Beta": 0.09759281054007313,
+      "Alpha": 0.20308351456935064,
+      "Delta": 0.17759517072469438,
+      "Epsilon": 0.1273269460842184
+    },
+    "kruskal_H_raw": 1810.946447662525,
+    "kruskal_H_min_speed_q25": 1245.5423887537893,
+    "kruskal_H_speed_residual": 1617.8384949393621,
+    "rank_corr_celltype_medians_raw_vs_residual": 0.6904761904761906,
+    "rank_corr_celltype_medians_raw_vs_min_speed": 0.7380952380952381
+  },
+  "permutation": {
+    "n": 100,
+    "kruskal_H": {
+      "observed": 1810.946447662525,
+      "null_mean": 129.4239224002148,
+      "null_sd": 64.83454400812893,
+      "z": 25.935595769000578
+    },
+    "morans_I": {
+      "observed": 0.926702322340308,
+      "null_mean": 0.4502041190301278,
+      "null_sd": 0.03908297409362475,
+      "z": 12.191963747915157
+    },
+    "celltype_median_null_mean": {
+      "Ductal": 0.9917,
+      "Ngn3 low EP": 0.9915,
+      "Ngn3 high EP": 0.9915,
+      "Pre-endocrine": 0.9918,
+      "Beta": 0.9915,
+      "Alpha": 0.9916,
+      "Delta": 0.9899,
+      "Epsilon": 0.991
+    }
+  }
+}

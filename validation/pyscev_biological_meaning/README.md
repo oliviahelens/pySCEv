@@ -4,9 +4,11 @@
 
 This document is the cross-dataset synthesis -- it does no compute itself. Once Q2/Q3 (Dubois cell-type stratification + enrichment) or a Q5 replacement dataset is done, fill in the convergence/divergence sections below.
 
-## Operational definition (from primary pass)
+## Operational definition (from primary pass, pySCEv 0.2)
 
-From `validation/pancreas_endocrinogenesis/`: low angular velocity entropy = coordinated motion in the cell's neighborhood; high entropy = scattered/incoherent local direction field. Terminal/mature populations score *higher* (Alpha, Delta) because once a cell stops moving along a shared trajectory, the local 2D direction field is dominated by noise. Actively transitioning populations (Ngn3 high EP, Pre-endocrine) score *lower*.
+From `validation/pancreas_endocrinogenesis/`: low angular velocity entropy = coordinated motion in the cell's neighborhood; high entropy = scattered/incoherent local direction field. The actively transitioning populations (Ngn3 high EP, Pre-endocrine) score far lower than everything else, and that survives removing slow cells, regressing out velocity speed, and a shuffled-velocity permutation null (Kruskal-Wallis z = 26).
+
+What did *not* survive the scorer fix and the speed control: the ordering among the remaining cell types. Entropy correlates with log speed (rho -0.49), and once speed is accounted for Ductal, Ngn3 low EP and the terminal endocrine types are roughly indistinguishable. "Terminal cells score higher" is mostly "slow cells score higher".
 
 This is the operational read. Everything below either confirms, refines, or contradicts it.
 
@@ -14,11 +16,11 @@ This is the operational read. Everything below either confirms, refines, or cont
 
 Within-celltype cohort DE + GSEA (full results in `validation/pancreas_endocrinogenesis_enrichment/`):
 
-- **Low pySCEv** is enriched for endocrine-progenitor TFs (Neurog3, Pax4, Foxa3) globally and for proliferation markers (MCM family, H2afz, PCNA, Tuba1b) within cell types like Ductal and Ngn3 high EP. Pdx1 also comes up in the Beta low cohort -- developmental beta TF expressed in cells still on the trajectory.
-- **High pySCEv** is enriched for mature hormone biosynthesis (Pyy, Iapp, Ins, Gcg, Chga) and mature alpha identity (Isl1, Arx, Meis2). Two sets pass FDR<0.05 in the curated-panel GSEA: PANCREATIC_HORMONES and MATURE_ALPHA, both up in high.
-- **Two readouts, different questions.** Cohort DE captures within-celltype contrast (does a Beta cell become Iapp+ as it loses coherent velocity?). Continuous module-score correlation captures cross-celltype scaling (does the progenitor TF score rank cell types in the same order as entropy?). They agree on the progenitor TF axis (rho -0.52) and disagree on proliferation (strong within celltype, ~0 globally).
+- **Low pySCEv** is enriched for endocrine-progenitor TFs (Neurog3, Pax4, Nkx6-1, Foxa3) globally (module-score rho -0.56) and within Pre-endocrine, and for proliferation markers (Pcna, Birc5, H2afz, Tuba1b) within Ductal.
+- **High pySCEv** globally carries Isl1/Meis2 and PANCREATIC_HORMONES (FDR 0.035), but that is cell-type composition of the pooled cohort. **Within Alpha and Beta the hormone genes go the other way** (Gcg, Iapp, Ins2 up in the *low* cohort). The old scorer's within-celltype "high = mature/secretory" result did not reproduce.
+- **Two readouts, different questions.** Cohort DE captures within-celltype contrast; continuous module scores capture cross-celltype scaling. They agree on the progenitor TF axis and nowhere else strongly.
 
-Bottom line for the synthesis: the pancreas data is consistent with the "low entropy = cell still riding a coordinated trajectory" reading, and the gene-level signal is biologically interpretable. Now we need a second dataset to claim generality.
+Bottom line for the synthesis: the robust pancreas signal is narrower than first reported -- "low entropy = cell on the coordinated progenitor wave". A second dataset is needed to see whether even that generalizes, and any cross-dataset comparison should control for velocity speed.
 
 ## Convergent signals across datasets
 
